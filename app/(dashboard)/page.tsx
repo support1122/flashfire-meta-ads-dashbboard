@@ -88,7 +88,7 @@ export default async function OverviewPage({
     prisma.alert.findMany({ where: { resolved: false }, orderBy: { createdAt: "desc" }, take: 5 }),
     prisma.campaign.findMany({ select: { id: true, name: true }, orderBy: { name: "asc" } }),
     prisma.campaign.findMany({
-      where: statusFilter ? { status: statusFilter } : undefined,
+      where: { status: "ACTIVE", ...(statusFilter ? { status: statusFilter } : {}) },
       select: { id: true, name: true, status: true },
       orderBy: { name: "asc" },
     }),
