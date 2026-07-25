@@ -17,6 +17,9 @@ interface CampaignRow {
   impressions?: number;
   clicks?: number;
   cpc?: number;
+  meetings?: number;
+  paid?: number;
+  revenue?: number;
 }
 
 const healthDot: Record<string, string> = {
@@ -59,6 +62,9 @@ export default function CampaignTable({ rows }: { rows: CampaignRow[] }) {
             <th className="text-right py-2.5 px-3 text-[var(--text-muted)] font-medium">Impressions</th>
             <th className="text-right py-2.5 px-3 text-[var(--text-muted)] font-medium">Clicks</th>
             <th className="text-right py-2.5 px-3 text-[var(--text-muted)] font-medium">Leads</th>
+            <th className="text-right py-2.5 px-3 text-[var(--text-muted)] font-medium">Meetings</th>
+            <th className="text-right py-2.5 px-3 text-[var(--text-muted)] font-medium">Paid</th>
+            <th className="text-right py-2.5 px-3 text-[var(--text-muted)] font-medium">Revenue</th>
             <th className="text-right py-2.5 px-3 text-[var(--text-muted)] font-medium">CTR</th>
             <th className="text-right py-2.5 px-3 text-[var(--text-muted)] font-medium">CPC</th>
             <th className="text-right py-2.5 px-3 text-[var(--text-muted)] font-medium">CPL</th>
@@ -90,6 +96,9 @@ export default function CampaignTable({ rows }: { rows: CampaignRow[] }) {
                   {row.clicks ? row.clicks.toLocaleString("en-IN") : "—"}
                 </td>
                 <td className="py-3 px-3 text-right tabular-nums">{row.leads}</td>
+                <td className="py-3 px-3 text-right tabular-nums text-[var(--text-2)]">{row.meetings ?? 0}</td>
+                <td className="py-3 px-3 text-right tabular-nums font-medium" style={{ color: (row.paid ?? 0) > 0 ? "var(--success)" : undefined }}>{row.paid ?? 0}</td>
+                <td className="py-3 px-3 text-right tabular-nums text-[var(--text-2)]">{(row.revenue ?? 0) > 0 ? `$${row.revenue}` : "—"}</td>
                 <td className="py-3 px-3 text-right tabular-nums text-[var(--text-2)]">{row.ctr.toFixed(2)}%</td>
                 <td className="py-3 px-3 text-right tabular-nums text-[var(--text-2)]">
                   {row.cpc ? fmt(row.cpc) : "—"}
