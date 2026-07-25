@@ -1,3 +1,5 @@
+export const maxDuration = 300; // 5 minutes (Vercel Pro allows up to 300s)
+
 import { prisma } from "@/lib/db";
 import {
   fetchCampaigns,
