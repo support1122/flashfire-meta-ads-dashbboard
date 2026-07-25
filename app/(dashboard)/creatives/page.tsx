@@ -1,0 +1,146 @@
+import { prisma } from "@/lib/db";
+import { parseDateRange } from "@/lib/query-helpers";
+import { calcCTR, calcCPL } from "@/lib/kpi-calc";
+import StatusBadge from "@/components/StatusBadge";
+import CreativesSortBar from "@/components/CreativesSortBar";
+
+export const dynamic = "force-dynamic";
+
+function formatINR(v: number) {
+  return `₹${v.toLocaleString("en-IN", { maximumFractionDigits: 0 })}`;
+}
+
+export default async function CreativesPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | undefined>>;
+}) {
+  const sp = await searchParams;
+  const params = new URLSearchParams(
+    Object.entries(sp).filter(([, v]) => v !== undefined) as [string, string][]
+  );
+  const range = parseDateRange(params);
+  const sortBy = sp.sort ?? "newest";
+  const activeOnly = sp.activeOnly === "1";
+
+  const ads = await prisma.ad.findMany({
+    where: activeOnly ? { status: "ACTIVE" } : undefined,
+    include: { adSet: { include: { campaign: true } } },
+  });
+  const adIds = ads.map((a) => a.id);
+
+  const agg = await prisma.insight.groupBy({
+    by: ["adId"],
+    where: { level: "ad", adId: { in: adIds }, date: { gte: range.from, lte: range.to } },
+    _sum: { spend: true, leads: true, clicks: true, impressions: true },
+  });
+  const aggMap = new Map(agg.map((a) => [a.adId, a]));
+
+  const rows = ads
+    .map((a) => {
+      const stats = aggMap.get(a.id);
+      const spend = stats?._sum.spend ?? 0;
+      const leads = stats?._sum.leads ?? 0;
+      const clicks = stats?._sum.clicks ?? 0;
+      const impressions = stats?._sum.impressions ?? 0;
+      return {
+        ...a,
+        spend,
+        leads,
+        cpl: calcCPL(spend, leads),
+        ctr: calcCTR(clicks, impressions),
+      };
+    })
+    .filter((r) => r.spend > 0)
+    .sort((a, b) => {
+      switch (sortBy) {
+        case "spend":    return b.spend - a.spend;
+        case "leads":    return b.leads - a.leads;
+        case "cpl_asc":  return (a.cpl ?? Infinity) - (b.cpl ?? Infinity);
+        case "cpl_desc": return (b.cpl ?? -Infinity) - (a.cpl ?? -Infinity);
+        case "ctr":      return b.ctr - a.ctr;
+        default:         return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+      }
+    });
+
+  const sortLabel: Record<string, string> = {
+    newest: "newest first",
+    spend: "highest spend",
+    leads: "most leads",
+    cpl_asc: "best CPL",
+    cpl_desc: "worst CPL",
+    ctr: "highest CTR",
+  };
+
+  return (
+    <div>
+      <div className="flex items-center justify-between flex-wrap gap-3 mb-5">
+        <div>
+          <h1 className="text-[19px] font-semibold m-0">Creatives</h1>
+          <div className="text-[12.5px] text-[var(--text-muted)] mt-0.5">
+            {rows.length} ads{activeOnly ? " · active only" : ""} · sorted by {sortLabel[sortBy] ?? "newest"} · last {Math.round((range.to.getTime() - range.from.getTime()) / 86400000)} days
+          </div>
+        </div>
+        <CreativesSortBar />
+      </div>
+
+      {rows.length === 0 && (
+        <p className="text-[var(--text-muted)] text-sm text-center py-10">
+          No creative data in this period yet.
+        </p>
+      )}
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+        {rows.map((ad) => (
+          <div key={ad.id} className="bg-[var(--surface)] border border-[var(--border)] rounded-[10px] overflow-hidden flex flex-col">
+            {/* Thumbnail */}
+            <div className="w-full h-44 bg-[var(--surface-2)] overflow-hidden">
+              {ad.creativeThumbnailUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={ad.creativeThumbnailUrl}
+                  alt={ad.name}
+                  className="w-full h-full object-cover object-top"
+                />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center text-[11px] text-[var(--text-muted)]">No preview</div>
+              )}
+            </div>
+
+            <div className="p-3.5 flex flex-col flex-1">
+              {/* Name + badge */}
+              <div className="flex items-start justify-between gap-2 mb-1">
+                <div className="font-medium text-[13px] leading-snug line-clamp-2">{ad.name}</div>
+                <div className="shrink-0 mt-0.5"><StatusBadge status={ad.status} /></div>
+              </div>
+              {/* Campaign › AdSet path */}
+              <div className="text-[11px] text-[var(--text-muted)] truncate mb-3">
+                {ad.adSet.campaign.name} <span className="mx-0.5">›</span> {ad.adSet.name}
+              </div>
+
+              {/* Metrics grid */}
+              <div className="grid grid-cols-4 gap-1 mt-auto text-center">
+                <div>
+                  <div className="text-[9.5px] text-[var(--text-muted)] uppercase tracking-wide">Spend</div>
+                  <div className="text-[12px] font-semibold tabular-nums">{formatINR(ad.spend)}</div>
+                </div>
+                <div>
+                  <div className="text-[9.5px] text-[var(--text-muted)] uppercase tracking-wide">Leads</div>
+                  <div className="text-[12px] font-semibold tabular-nums">{ad.leads}</div>
+                </div>
+                <div>
+                  <div className="text-[9.5px] text-[var(--text-muted)] uppercase tracking-wide">CPL</div>
+                  <div className="text-[12px] font-semibold tabular-nums">{ad.cpl !== null ? formatINR(ad.cpl) : "—"}</div>
+                </div>
+                <div>
+                  <div className="text-[9.5px] text-[var(--text-muted)] uppercase tracking-wide">CTR</div>
+                  <div className="text-[12px] font-semibold tabular-nums">{ad.ctr.toFixed(2)}%</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}

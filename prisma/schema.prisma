@@ -1,0 +1,115 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Campaign {
+  id             String   @id
+  name           String
+  objective      String?
+  status         String
+  dailyBudget    Float?
+  lifetimeBudget Float?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  adSets   AdSet[]
+  insights Insight[]
+}
+
+model AdSet {
+  id          String   @id
+  campaignId  String
+  name        String
+  status      String
+  dailyBudget Float?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  campaign Campaign  @relation(fields: [campaignId], references: [id])
+  ads      Ad[]
+  insights Insight[]
+}
+
+model Ad {
+  id                   String   @id
+  adSetId              String
+  name                 String
+  status               String
+  creativeThumbnailUrl String?
+  creativeTitle        String?
+  creativeBody         String?
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  adSet    AdSet     @relation(fields: [adSetId], references: [id])
+  insights Insight[]
+}
+
+model Insight {
+  id          String   @id
+  date        DateTime
+  level       String
+  campaignId  String?
+  adSetId     String?
+  adId        String?
+  spend       Float    @default(0)
+  impressions Int      @default(0)
+  reach       Int      @default(0)
+  frequency   Float    @default(0)
+  clicks      Int      @default(0)
+  ctr         Float    @default(0)
+  cpc         Float    @default(0)
+  cpm         Float    @default(0)
+  leads       Int      @default(0)
+  cpl         Float?
+  placement   String?
+  ageGender   String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  campaign Campaign? @relation(fields: [campaignId], references: [id])
+  adSet    AdSet?    @relation(fields: [adSetId], references: [id])
+  ad       Ad?       @relation(fields: [adId], references: [id])
+
+  @@index([level, date])
+  @@index([campaignId, level, date])
+  @@index([adSetId, level, date])
+  @@index([adId, level, date])
+}
+
+model DailyAccountSummary {
+  date        DateTime @id
+  spend       Float    @default(0)
+  impressions Int      @default(0)
+  reach       Int      @default(0)
+  clicks      Int      @default(0)
+  ctr         Float    @default(0)
+  cpc         Float    @default(0)
+  cpm         Float    @default(0)
+  leads       Int      @default(0)
+  cpl         Float?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Alert {
+  id        String   @id @default(cuid())
+  severity  String
+  title     String
+  body      String
+  resolved  Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model SyncLog {
+  id        String   @id @default(cuid())
+  status    String
+  message   String
+  createdAt DateTime @default(now())
+}

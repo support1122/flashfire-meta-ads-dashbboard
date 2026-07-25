@@ -1,0 +1,254 @@
+import {
+  IndianRupee,
+  Target,
+  Receipt,
+  MousePointerClick,
+  Coins,
+  Eye,
+  PlayCircle,
+  Wallet,
+} from "lucide-react";
+import { prisma } from "@/lib/db";
+import { parseDateRange } from "@/lib/query-helpers";
+import { calcCTR, calcCPC, calcCPM, calcCPL, calcPercentChange } from "@/lib/kpi-calc";
+import KpiCard from "@/components/KpiCard";
+import TrendChart from "@/components/TrendChart";
+import AlertCard from "@/components/AlertCard";
+import FilterBar from "@/components/FilterBar";
+import CampaignTable from "@/components/CampaignTable";
+
+export const dynamic = "force-dynamic";
+
+function formatINR(v: number) {
+  return `₹${v.toLocaleString("en-IN", { maximumFractionDigits: 0 })}`;
+}
+
+function direction(pct: number | null): "up" | "down" | "flat" {
+  if (pct === null || Math.abs(pct) < 0.5) return "flat";
+  return pct > 0 ? "up" : "down";
+}
+
+export default async function OverviewPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | undefined>>;
+}) {
+  const sp = await searchParams;
+  const params = new URLSearchParams(
+    Object.entries(sp).filter(([, v]) => v !== undefined) as [string, string][]
+  );
+  const range = parseDateRange(params);
+  const prevLengthDays = Math.round((range.to.getTime() - range.from.getTime()) / 86400000);
+  const prevFrom = new Date(range.from.getTime() - (prevLengthDays + 1) * 86400000);
+  const prevTo = new Date(range.from.getTime() - 1);
+
+  const campaignIdFilter = sp.campaignId || undefined;
+  const statusFilter = sp.status || undefined;
+
+  const whereFor = (from: Date, to: Date) => ({
+    level: "campaign" as const,
+    date: { gte: from, lte: to },
+    ...(campaignIdFilter ? { campaignId: campaignIdFilter } : {}),
+    ...(statusFilter ? { campaign: { status: statusFilter } } : {}),
+  });
+
+  // All independent reads fire in parallel (no client-side waterfalls, no Meta calls here — Postgres only).
+  const [
+    currentAgg,
+    previousAgg,
+    activeCount,
+    totalCount,
+    budgetAgg,
+    trendRows,
+    alerts,
+    allCampaigns,
+    campaignsForTable,
+  ] = await Promise.all([
+    prisma.insight.aggregate({
+      where: whereFor(range.from, range.to),
+      _sum: { spend: true, impressions: true, clicks: true, leads: true },
+    }),
+    prisma.insight.aggregate({
+      where: whereFor(prevFrom, prevTo),
+      _sum: { spend: true, impressions: true, clicks: true, leads: true },
+    }),
+    prisma.campaign.count({ where: { status: "ACTIVE" } }),
+    prisma.campaign.count(),
+    prisma.campaign.aggregate({ _sum: { dailyBudget: true } }),
+    prisma.insight.groupBy({
+      by: ["date"],
+      where: whereFor(range.from, range.to),
+      _sum: { spend: true, leads: true, clicks: true, impressions: true },
+      orderBy: { date: "asc" },
+    }),
+    prisma.alert.findMany({ where: { resolved: false }, orderBy: { createdAt: "desc" }, take: 5 }),
+    prisma.campaign.findMany({ select: { id: true, name: true }, orderBy: { name: "asc" } }),
+    prisma.campaign.findMany({
+      where: statusFilter ? { status: statusFilter } : undefined,
+      orderBy: { name: "asc" },
+      take: 8,
+    }),
+  ]);
+
+  const spend = currentAgg._sum.spend ?? 0;
+  const impressions = currentAgg._sum.impressions ?? 0;
+  const clicks = currentAgg._sum.clicks ?? 0;
+  const leads = currentAgg._sum.leads ?? 0;
+  const prevSpend = previousAgg._sum.spend ?? 0;
+  const prevImpressions = previousAgg._sum.impressions ?? 0;
+  const prevClicks = previousAgg._sum.clicks ?? 0;
+  const prevLeads = previousAgg._sum.leads ?? 0;
+
+  const cpl = calcCPL(spend, leads);
+  const prevCpl = calcCPL(prevSpend, prevLeads);
+  const ctr = calcCTR(clicks, impressions);
+  const prevCtr = calcCTR(prevClicks, prevImpressions);
+  const cpc = calcCPC(spend, clicks);
+  const prevCpc = calcCPC(prevSpend, prevClicks);
+  const cpm = calcCPM(spend, impressions);
+  const prevCpm = calcCPM(prevSpend, prevImpressions);
+
+  const daysElapsed = Math.max(1, prevLengthDays + 1);
+  const totalDailyBudget = budgetAgg._sum.dailyBudget ?? 0;
+  // Budget pacing (spend vs. daily-budget * days) only means something over a short,
+  // current window — over multi-month/all-time ranges the denominator dwarfs actual
+  // spend and the % is meaningless, so we only compute it for ranges of 31 days or less.
+  const budgetPacing =
+    totalDailyBudget > 0 && daysElapsed <= 31 ? spend / (totalDailyBudget * daysElapsed) : null;
+
+  const trendData = trendRows.map((r) => {
+    const s = r._sum.spend ?? 0;
+    const l = r._sum.leads ?? 0;
+    const c = r._sum.clicks ?? 0;
+    const i = r._sum.impressions ?? 0;
+    return {
+      date: r.date.toISOString().slice(0, 10),
+      spend: s,
+      leads: l,
+      cpl: l > 0 ? s / l : null,
+      ctr: i > 0 ? (c / i) * 100 : 0,
+    };
+  });
+
+  // Campaign table rows for the top 8 campaigns (by name), with health flags computed against
+  // the account average for the selected period.
+  const campaignIds = campaignsForTable.map((c) => c.id);
+  const [perCampaignAgg, sparkRows] = await Promise.all([
+    prisma.insight.groupBy({
+      by: ["campaignId"],
+      where: { level: "campaign", campaignId: { in: campaignIds }, date: { gte: range.from, lte: range.to } },
+      _sum: { spend: true, leads: true, clicks: true, impressions: true },
+    }),
+    prisma.insight.findMany({
+      where: { level: "campaign", campaignId: { in: campaignIds }, date: { gte: range.from, lte: range.to } },
+      select: { campaignId: true, date: true, spend: true },
+      orderBy: { date: "asc" },
+    }),
+  ]);
+  const aggMap = new Map(perCampaignAgg.map((a) => [a.campaignId, a]));
+  const sparkMap = new Map<string, number[]>();
+  for (const r of sparkRows) {
+    if (!r.campaignId) continue;
+    const arr = sparkMap.get(r.campaignId) ?? [];
+    arr.push(r.spend);
+    sparkMap.set(r.campaignId, arr);
+  }
+
+  const accountAvgCpl = cpl;
+  const accountAvgCtr = ctr;
+
+  const tableRows = campaignsForTable.map((c) => {
+    const agg = aggMap.get(c.id);
+    const cSpend = agg?._sum.spend ?? 0;
+    const cLeads = agg?._sum.leads ?? 0;
+    const cClicks = agg?._sum.clicks ?? 0;
+    const cImpressions = agg?._sum.impressions ?? 0;
+    const cCpl = calcCPL(cSpend, cLeads);
+    const cCtr = calcCTR(cClicks, cImpressions);
+    let health: "good" | "watch" | "bad" = "watch";
+    if (cCpl !== null && accountAvgCpl !== null) {
+      if (cCpl > 1.5 * accountAvgCpl) health = "bad";
+      else if (cCpl > accountAvgCpl) health = "watch";
+      else if (cCpl <= accountAvgCpl && cCtr >= accountAvgCtr) health = "good";
+    }
+    return {
+      id: c.id,
+      name: c.name,
+      objective: null,
+      status: "ACTIVE",
+      spend: cSpend,
+      leads: cLeads,
+      cpl: cCpl,
+      ctr: cCtr,
+      health,
+      sparkline: sparkMap.get(c.id) ?? [],
+    };
+  });
+
+  return (
+    <div>
+      <div className="flex items-center justify-between flex-wrap gap-3 mb-5">
+        <div>
+          <h1 className="text-[19px] font-semibold m-0">Overview</h1>
+          <div className="text-[12.5px] text-[var(--text-muted)] mt-0.5">
+            {range.from.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })} –{" "}
+            {range.to.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
+          </div>
+        </div>
+        <FilterBar campaigns={allCampaigns} />
+      </div>
+
+      <div className="grid gap-3 mb-5.5" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))" }}>
+        <KpiCard icon={<IndianRupee size={13} />} label="Total spend" value={formatINR(spend)} deltaLabel={pctLabel(calcPercentChange(spend, prevSpend), "vs prev period")} direction={direction(calcPercentChange(spend, prevSpend))} />
+        <KpiCard icon={<Target size={13} />} label="Leads" value={leads.toLocaleString("en-IN")} deltaLabel={pctLabel(calcPercentChange(leads, prevLeads), "vs prev period")} direction={direction(calcPercentChange(leads, prevLeads))} />
+        <KpiCard icon={<Receipt size={13} />} label="CPL" value={cpl !== null ? formatINR(cpl) : "—"} deltaLabel={cpl !== null && prevCpl !== null ? pctLabel(calcPercentChange(cpl, prevCpl), null, true) : undefined} direction={cpl !== null && prevCpl !== null ? direction(-1 * (calcPercentChange(cpl, prevCpl) ?? 0)) : "flat"} />
+        <KpiCard icon={<MousePointerClick size={13} />} label="CTR" value={`${ctr.toFixed(2)}%`} deltaLabel={pctLabel(calcPercentChange(ctr, prevCtr), "vs prev")} direction={direction(calcPercentChange(ctr, prevCtr))} />
+        <KpiCard icon={<Coins size={13} />} label="CPC" value={formatINR(cpc)} deltaLabel={pctLabel(calcPercentChange(cpc, prevCpc), null, true)} direction={direction(-1 * (calcPercentChange(cpc, prevCpc) ?? 0))} />
+        <KpiCard icon={<Eye size={13} />} label="CPM" value={formatINR(cpm)} deltaLabel={pctLabel(calcPercentChange(cpm, prevCpm), null, true)} direction={direction(-1 * (calcPercentChange(cpm, prevCpm) ?? 0))} />
+        <KpiCard icon={<PlayCircle size={13} />} label="Active campaigns" value={`${activeCount} / ${totalCount}`} deltaLabel={`${totalCount - activeCount} paused`} direction="flat" />
+        <KpiCard icon={<Wallet size={13} />} label="Budget pacing" value={budgetPacing !== null ? `${(budgetPacing * 100).toFixed(0)}%` : "—"} deltaLabel={budgetPacing !== null ? "of budget spent this period" : "select 31 days or fewer"} direction="flat" />
+      </div>
+
+      <div className="grid gap-5 mb-5" style={{ gridTemplateColumns: "2fr 1fr" }}>
+        <div className="bg-[var(--surface)] border border-[var(--border)] rounded-[10px] px-4.5 py-4">
+          <div className="mb-3.5">
+            <div className="text-sm font-semibold">Spend vs CPL trend</div>
+            <div className="text-xs text-[var(--text-muted)] mt-0.5">Daily, selected period</div>
+          </div>
+          <TrendChart data={trendData} />
+        </div>
+
+        <div className="bg-[var(--surface)] border border-[var(--border)] rounded-[10px] px-4.5 py-4">
+          <div className="text-sm font-semibold mb-3.5">Alerts</div>
+          {alerts.length === 0 && (
+            <p className="text-[13px] text-[var(--text-muted)]">No active alerts.</p>
+          )}
+          {alerts.map((a) => (
+            <AlertCard key={a.id} severity={a.severity as "bad" | "watch" | "good"} title={a.title} body={a.body} />
+          ))}
+        </div>
+      </div>
+
+      <div className="bg-[var(--surface)] border border-[var(--border)] rounded-[10px] px-4.5 py-4">
+        <div className="flex items-center justify-between mb-3.5">
+          <div>
+            <div className="text-sm font-semibold">Campaigns</div>
+            <div className="text-xs text-[var(--text-muted)] mt-0.5">
+              {activeCount} active · {totalCount - activeCount} paused
+            </div>
+          </div>
+          <div className="text-xs text-[var(--text-muted)]">Click a row to drill into ad sets</div>
+        </div>
+        <CampaignTable rows={tableRows} />
+      </div>
+    </div>
+  );
+}
+
+function pctLabel(pct: number | null, suffix: string | null, invert = false): string | undefined {
+  if (pct === null) return undefined;
+  const displayed = invert ? -pct : pct;
+  const arrowWord = displayed > 0 ? (invert ? "worse" : "up") : displayed < 0 ? (invert ? "better" : "down") : "flat";
+  if (Math.abs(pct) < 0.5) return "flat vs prev period";
+  return `${Math.abs(pct).toFixed(1)}% ${suffix ?? arrowWord}`;
+}
