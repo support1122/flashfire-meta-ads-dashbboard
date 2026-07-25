@@ -164,7 +164,16 @@ export default async function OverviewPage({
     sparkMap.set(r.campaignId, arr);
   }
 
-  type CrmEntry = { meetings: number; paid: number; revenue: number };
+  function fmtRevenue(amount: number, currency: string): string {
+    const cur = (currency || "usd").toUpperCase();
+    const n = amount.toLocaleString("en-US", { maximumFractionDigits: 0 });
+    if (cur === "USD") return `$${n}`;
+    if (cur === "CAD") return `CA$${n}`;
+    if (cur === "INR") return `₹${amount.toLocaleString("en-IN", { maximumFractionDigits: 0 })}`;
+    return `${cur} ${n}`;
+  }
+
+  type CrmEntry = { meetings: number; paid: number; revenueDisplay: string };
   let crmMap: Map<string, CrmEntry> = new Map();
   try {
     const db = await getCrmDb();
@@ -193,24 +202,25 @@ export default async function OverviewPage({
         },
         {
           $group: {
-            _id: "$metaCampaignName",
+            _id: { campaign: "$metaCampaignName", currency: { $ifNull: ["$paymentPlan.currency", "usd"] } },
             paid: { $sum: 1 },
-            revenue: { $sum: { $ifNull: ["$paymentPlan.price", 0] } },
+            total: { $sum: { $ifNull: ["$paymentPlan.price", 0] } },
           },
         },
       ]).toArray(),
     ]);
     for (const r of meetingsAgg) {
       const key = String(r._id).trim().toLowerCase();
-      const cur = crmMap.get(key) ?? { meetings: 0, paid: 0, revenue: 0 };
+      const cur = crmMap.get(key) ?? { meetings: 0, paid: 0, revenueDisplay: "" };
       cur.meetings = r.meetings;
       crmMap.set(key, cur);
     }
     for (const r of paidAgg) {
-      const key = String(r._id).trim().toLowerCase();
-      const cur = crmMap.get(key) ?? { meetings: 0, paid: 0, revenue: 0 };
-      cur.paid = r.paid;
-      cur.revenue = r.revenue;
+      const key = String(r._id.campaign).trim().toLowerCase();
+      const cur = crmMap.get(key) ?? { meetings: 0, paid: 0, revenueDisplay: "" };
+      cur.paid += r.paid;
+      const part = fmtRevenue(r.total, r._id.currency);
+      cur.revenueDisplay = cur.revenueDisplay ? `${cur.revenueDisplay} + ${part}` : part;
       crmMap.set(key, cur);
     }
   } catch (e) {
@@ -234,7 +244,7 @@ export default async function OverviewPage({
       else if (cCpl > accountAvgCpl) health = "watch";
       else if (cCpl <= accountAvgCpl && cCtr >= accountAvgCtr) health = "good";
     }
-    const crm = crmMap.get(c.name.trim().toLowerCase()) ?? { meetings: 0, paid: 0, revenue: 0 };
+    const crm = crmMap.get(c.name.trim().toLowerCase()) ?? { meetings: 0, paid: 0, revenueDisplay: "" };
     return {
       id: c.id,
       name: c.name,
@@ -251,7 +261,7 @@ export default async function OverviewPage({
       sparkline: sparkMap.get(c.id) ?? [],
       meetings: crm.meetings,
       paid: crm.paid,
-      revenue: crm.revenue,
+      revenue: crm.revenueDisplay,
     };
   }).sort((a, b) => b.spend - a.spend);
 

@@ -19,7 +19,7 @@ interface CampaignRow {
   cpc?: number;
   meetings?: number;
   paid?: number;
-  revenue?: number;
+  revenue?: string;
 }
 
 const healthDot: Record<string, string> = {
@@ -98,7 +98,7 @@ export default function CampaignTable({ rows }: { rows: CampaignRow[] }) {
                 <td className="py-3 px-3 text-right tabular-nums">{row.leads}</td>
                 <td className="py-3 px-3 text-right tabular-nums text-[var(--text-2)]">{row.meetings ?? 0}</td>
                 <td className="py-3 px-3 text-right tabular-nums font-medium" style={{ color: (row.paid ?? 0) > 0 ? "var(--success)" : undefined }}>{row.paid ?? 0}</td>
-                <td className="py-3 px-3 text-right tabular-nums text-[var(--text-2)]">{(row.revenue ?? 0) > 0 ? row.revenue : "—"}</td>
+                <td className="py-3 px-3 text-right tabular-nums text-[var(--text-2)]">{row.revenue || "—"}</td>
                 <td className="py-3 px-3 text-right tabular-nums text-[var(--text-2)]">{row.ctr.toFixed(2)}%</td>
                 <td className="py-3 px-3 text-right tabular-nums text-[var(--text-2)]">
                   {row.cpc ? fmt(row.cpc) : "—"}
