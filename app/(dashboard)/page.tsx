@@ -20,6 +20,7 @@ import TrendChart from "@/components/TrendChart";
 import AlertCard from "@/components/AlertCard";
 import FilterBar from "@/components/FilterBar";
 import CampaignTable from "@/components/CampaignTable";
+import { getCrmDb } from "@/lib/mongo-crm";
 
 export const dynamic = "force-dynamic";
 
@@ -163,6 +164,59 @@ export default async function OverviewPage({
     sparkMap.set(r.campaignId, arr);
   }
 
+  type CrmEntry = { meetings: number; paid: number; revenue: number };
+  let crmMap: Map<string, CrmEntry> = new Map();
+  try {
+    const db = await getCrmDb();
+    const coll = db.collection("campaignbookings");
+    const [meetingsAgg, paidAgg] = await Promise.all([
+      coll.aggregate([
+        {
+          $match: {
+            metaCampaignName: { $ne: null },
+            bookingStatus: { $in: ["completed", "paid", "no-show", "canceled", "rescheduled"] },
+            $or: [
+              { bookingCreatedAt: { $gte: range.from, $lte: range.to } },
+              { scheduledEventStartTime: { $gte: range.from, $lte: range.to } },
+            ],
+          },
+        },
+        { $group: { _id: "$metaCampaignName", meetings: { $sum: 1 } } },
+      ]).toArray(),
+      coll.aggregate([
+        {
+          $match: {
+            metaCampaignName: { $ne: null },
+            bookingStatus: "paid",
+            statusChangedAt: { $gte: range.from, $lte: range.to },
+          },
+        },
+        {
+          $group: {
+            _id: "$metaCampaignName",
+            paid: { $sum: 1 },
+            revenue: { $sum: { $ifNull: ["$paymentPlan.price", 0] } },
+          },
+        },
+      ]).toArray(),
+    ]);
+    for (const r of meetingsAgg) {
+      const key = String(r._id).trim().toLowerCase();
+      const cur = crmMap.get(key) ?? { meetings: 0, paid: 0, revenue: 0 };
+      cur.meetings = r.meetings;
+      crmMap.set(key, cur);
+    }
+    for (const r of paidAgg) {
+      const key = String(r._id).trim().toLowerCase();
+      const cur = crmMap.get(key) ?? { meetings: 0, paid: 0, revenue: 0 };
+      cur.paid = r.paid;
+      cur.revenue = r.revenue;
+      crmMap.set(key, cur);
+    }
+  } catch (e) {
+    console.error("CRM funnel fetch failed (overview)", e);
+  }
+
   const accountAvgCpl = cpl;
   const accountAvgCtr = ctr;
 
@@ -180,6 +234,7 @@ export default async function OverviewPage({
       else if (cCpl > accountAvgCpl) health = "watch";
       else if (cCpl <= accountAvgCpl && cCtr >= accountAvgCtr) health = "good";
     }
+    const crm = crmMap.get(c.name.trim().toLowerCase()) ?? { meetings: 0, paid: 0, revenue: 0 };
     return {
       id: c.id,
       name: c.name,
@@ -194,6 +249,9 @@ export default async function OverviewPage({
       ctr: cCtr,
       health,
       sparkline: sparkMap.get(c.id) ?? [],
+      meetings: crm.meetings,
+      paid: crm.paid,
+      revenue: crm.revenue,
     };
   }).sort((a, b) => b.spend - a.spend);
 
