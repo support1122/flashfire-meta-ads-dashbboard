@@ -136,11 +136,12 @@ export default function TrendChart({ data }: { data: TrendRow[] }) {
             <Tooltip
               contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid var(--border)" }}
               labelFormatter={(v) => formatLabel(String(v), granularity)}
-              formatter={(value: number, name: string) => {
-                if (name === "spend") return [`₹${value.toLocaleString("en-IN")}`, "Spend"];
-                if (name === "cpl") return [value != null ? `₹${value.toFixed(0)}` : "—", "CPL"];
-                if (name === "leads") return [value, "Leads"];
-                return [value, name];
+              formatter={(value, name) => {
+                const v = value as number;
+                if (name === "spend") return [`₹${v.toLocaleString("en-IN")}`, "Spend"];
+                if (name === "cpl") return [v != null ? `₹${v.toFixed(0)}` : "—", "CPL"];
+                if (name === "leads") return [String(v), "Leads"];
+                return [String(v), String(name)];
               }}
             />
             <Area
