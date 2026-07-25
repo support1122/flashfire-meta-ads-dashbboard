@@ -89,6 +89,7 @@ export default async function OverviewPage({
     prisma.campaign.findMany({ select: { id: true, name: true }, orderBy: { name: "asc" } }),
     prisma.campaign.findMany({
       where: statusFilter ? { status: statusFilter } : undefined,
+      select: { id: true, name: true, status: true },
       orderBy: { name: "asc" },
     }),
   ]);
@@ -183,7 +184,7 @@ export default async function OverviewPage({
       id: c.id,
       name: c.name,
       objective: null,
-      status: "ACTIVE",
+      status: c.status,
       spend: cSpend,
       leads: cLeads,
       impressions: cImpressions,
