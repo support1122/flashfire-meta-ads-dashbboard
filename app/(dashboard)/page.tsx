@@ -90,7 +90,6 @@ export default async function OverviewPage({
     prisma.campaign.findMany({
       where: statusFilter ? { status: statusFilter } : undefined,
       orderBy: { name: "asc" },
-      take: 8,
     }),
   ]);
 
@@ -195,7 +194,7 @@ export default async function OverviewPage({
       health,
       sparkline: sparkMap.get(c.id) ?? [],
     };
-  });
+  }).sort((a, b) => b.spend - a.spend);
 
   return (
     <div>
