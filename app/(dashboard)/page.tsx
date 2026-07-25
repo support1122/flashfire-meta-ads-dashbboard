@@ -7,6 +7,10 @@ import {
   Eye,
   PlayCircle,
   Wallet,
+  BarChart2,
+  Hand,
+  Users,
+  TrendingUp,
 } from "lucide-react";
 import { prisma } from "@/lib/db";
 import { parseDateRange } from "@/lib/query-helpers";
@@ -66,11 +70,11 @@ export default async function OverviewPage({
   ] = await Promise.all([
     prisma.insight.aggregate({
       where: whereFor(range.from, range.to),
-      _sum: { spend: true, impressions: true, clicks: true, leads: true },
+      _sum: { spend: true, impressions: true, clicks: true, leads: true, reach: true },
     }),
     prisma.insight.aggregate({
       where: whereFor(prevFrom, prevTo),
-      _sum: { spend: true, impressions: true, clicks: true, leads: true },
+      _sum: { spend: true, impressions: true, clicks: true, leads: true, reach: true },
     }),
     prisma.campaign.count({ where: { status: "ACTIVE" } }),
     prisma.campaign.count(),
@@ -94,10 +98,15 @@ export default async function OverviewPage({
   const impressions = currentAgg._sum.impressions ?? 0;
   const clicks = currentAgg._sum.clicks ?? 0;
   const leads = currentAgg._sum.leads ?? 0;
+  const reach = currentAgg._sum.reach ?? 0;
   const prevSpend = previousAgg._sum.spend ?? 0;
   const prevImpressions = previousAgg._sum.impressions ?? 0;
   const prevClicks = previousAgg._sum.clicks ?? 0;
   const prevLeads = previousAgg._sum.leads ?? 0;
+  const prevReach = previousAgg._sum.reach ?? 0;
+
+  const leadRate = clicks > 0 ? (leads / clicks) * 100 : 0;
+  const prevLeadRate = prevClicks > 0 ? (prevLeads / prevClicks) * 100 : 0;
 
   const cpl = calcCPL(spend, leads);
   const prevCpl = calcCPL(prevSpend, prevLeads);
@@ -207,6 +216,10 @@ export default async function OverviewPage({
         <KpiCard icon={<Eye size={13} />} label="CPM" value={formatINR(cpm)} deltaLabel={pctLabel(calcPercentChange(cpm, prevCpm), null, true)} direction={direction(-1 * (calcPercentChange(cpm, prevCpm) ?? 0))} />
         <KpiCard icon={<PlayCircle size={13} />} label="Active campaigns" value={`${activeCount} / ${totalCount}`} deltaLabel={`${totalCount - activeCount} paused`} direction="flat" />
         <KpiCard icon={<Wallet size={13} />} label="Budget pacing" value={budgetPacing !== null ? `${(budgetPacing * 100).toFixed(0)}%` : "—"} deltaLabel={budgetPacing !== null ? "of budget spent this period" : "select 31 days or fewer"} direction="flat" />
+        <KpiCard icon={<BarChart2 size={13} />} label="Impressions" value={impressions.toLocaleString("en-IN")} deltaLabel={pctLabel(calcPercentChange(impressions, prevImpressions), "vs prev period")} direction={direction(calcPercentChange(impressions, prevImpressions))} />
+        <KpiCard icon={<Hand size={13} />} label="Clicks" value={clicks.toLocaleString("en-IN")} deltaLabel={pctLabel(calcPercentChange(clicks, prevClicks), "vs prev period")} direction={direction(calcPercentChange(clicks, prevClicks))} />
+        <KpiCard icon={<TrendingUp size={13} />} label="Lead Rate" value={`${leadRate.toFixed(2)}%`} subtitle="Leads ÷ Clicks" deltaLabel={pctLabel(calcPercentChange(leadRate, prevLeadRate), "vs prev period")} direction={direction(calcPercentChange(leadRate, prevLeadRate))} />
+        <KpiCard icon={<Users size={13} />} label="Reach" value={reach.toLocaleString("en-IN")} tooltip="Are you reaching new people or burning the same audience? If reach is flat but frequency is rising, refresh your creatives." deltaLabel={pctLabel(calcPercentChange(reach, prevReach), "vs prev period")} direction={direction(calcPercentChange(reach, prevReach))} />
       </div>
 
       <div className="grid gap-5 mb-5" style={{ gridTemplateColumns: "2fr 1fr" }}>
