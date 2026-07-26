@@ -182,28 +182,6 @@ export default async function CreativesPage({
                       <div className="text-[11.5px] font-semibold tabular-nums">{ad.completionRate !== null ? `${ad.completionRate.toFixed(1)}%` : "—"}</div>
                     </div>
                   </div>
-                  {/* Drop-off bar: 25 / 50 / 75 / 100 */}
-                  {ad.videoPlays && ad.videoPlays > 0 && (
-                    <div className="space-y-1">
-                      {[
-                        { label: "25%", val: ad.videoP25 },
-                        { label: "50%", val: ad.videoP50 },
-                        { label: "75%", val: ad.videoP75 },
-                        { label: "100%", val: ad.videoP100 },
-                      ].map(({ label, val }) => {
-                        const pct = val ? (val / ad.videoPlays!) * 100 : 0;
-                        return (
-                          <div key={label} className="flex items-center gap-1.5">
-                            <div className="text-[9px] text-[var(--text-muted)] w-6 text-right">{label}</div>
-                            <div className="flex-1 h-1.5 bg-[var(--surface-2)] rounded-full overflow-hidden">
-                              <div className="h-full bg-[var(--accent)] rounded-full" style={{ width: `${Math.min(pct, 100)}%` }} />
-                            </div>
-                            <div className="text-[9px] text-[var(--text-muted)] w-8">{pct.toFixed(0)}%</div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
                 </div>
               )}
             </div>
