@@ -13,7 +13,7 @@ export default async function SettingsPage() {
 
   const [recentSyncs, users] = await Promise.all([
     prisma.syncLog.findMany({ orderBy: { createdAt: "desc" }, take: 10 }),
-    isAdmin ? prisma.user.findMany({ select: { id: true, username: true, role: true, createdAt: true }, orderBy: { createdAt: "asc" } }) : Promise.resolve([]),
+    isAdmin ? prisma.user.findMany({ select: { id: true, username: true, role: true, createdAt: true }, orderBy: { createdAt: "asc" } }).then(us => us.map(u => ({ ...u, createdAt: u.createdAt.toISOString() }))) : Promise.resolve([]),
   ]);
 
   return (
