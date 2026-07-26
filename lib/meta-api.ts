@@ -74,6 +74,13 @@ export interface MetaInsightRow {
   cpm?: string;
   frequency?: string;
   actions?: Array<{ action_type: string; value: string }>;
+  video_play_actions?: Array<{ action_type: string; value: string }>;
+  video_avg_time_watched_actions?: Array<{ action_type: string; value: string }>;
+  video_p25_watched_actions?: Array<{ action_type: string; value: string }>;
+  video_p50_watched_actions?: Array<{ action_type: string; value: string }>;
+  video_p75_watched_actions?: Array<{ action_type: string; value: string }>;
+  video_p100_watched_actions?: Array<{ action_type: string; value: string }>;
+  video_thruplay_watched_actions?: Array<{ action_type: string; value: string }>;
   publisher_platform?: string;
   platform_position?: string;
   age?: string;
@@ -116,7 +123,7 @@ export async function fetchInsights(
 ): Promise<MetaInsightRow[]> {
   return fetchAllPages<MetaInsightRow>(`/${ACCOUNT}/insights`, {
     level,
-    fields: "campaign_id,adset_id,ad_id,spend,impressions,reach,clicks,ctr,cpc,cpm,frequency,actions",
+    fields: "campaign_id,adset_id,ad_id,spend,impressions,reach,clicks,ctr,cpc,cpm,frequency,actions,video_play_actions,video_avg_time_watched_actions,video_p25_watched_actions,video_p50_watched_actions,video_p75_watched_actions,video_p100_watched_actions,video_thruplay_watched_actions",
     time_increment: "1",
     time_range: JSON.stringify({ since, until }),
     limit: "500",

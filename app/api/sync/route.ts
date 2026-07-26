@@ -188,6 +188,14 @@ async function upsertInsights(
       row.frequency !== undefined ? Number(row.frequency) : calcFrequency(impressions, reach);
     const cpl = calcCPL(spend, leads);
 
+    const videoPlays = row.video_play_actions?.[0] ? Math.round(Number(row.video_play_actions[0].value)) : null;
+    const videoAvgWatchSec = row.video_avg_time_watched_actions?.[0] ? Number(row.video_avg_time_watched_actions[0].value) : null;
+    const videoP25 = row.video_p25_watched_actions?.[0] ? Math.round(Number(row.video_p25_watched_actions[0].value)) : null;
+    const videoP50 = row.video_p50_watched_actions?.[0] ? Math.round(Number(row.video_p50_watched_actions[0].value)) : null;
+    const videoP75 = row.video_p75_watched_actions?.[0] ? Math.round(Number(row.video_p75_watched_actions[0].value)) : null;
+    const videoP100 = row.video_p100_watched_actions?.[0] ? Math.round(Number(row.video_p100_watched_actions[0].value)) : null;
+    const thruPlays = row.video_thruplay_watched_actions?.[0] ? Math.round(Number(row.video_thruplay_watched_actions[0].value)) : null;
+
     const date = new Date(row.date_start);
     // Deterministic id so re-syncing the same day/entity/level updates in place.
     const id = `${level}_${row.campaign_id ?? ""}_${row.adset_id ?? ""}_${row.ad_id ?? ""}_${row.date_start}`;
@@ -211,6 +219,13 @@ async function upsertInsights(
         cpm,
         leads,
         cpl,
+        videoPlays,
+        videoAvgWatchSec,
+        videoP25,
+        videoP50,
+        videoP75,
+        videoP100,
+        thruPlays,
       },
       update: {
         spend,
@@ -223,6 +238,13 @@ async function upsertInsights(
         cpm,
         leads,
         cpl,
+        videoPlays,
+        videoAvgWatchSec,
+        videoP25,
+        videoP50,
+        videoP75,
+        videoP100,
+        thruPlays,
       },
     });
     count++;

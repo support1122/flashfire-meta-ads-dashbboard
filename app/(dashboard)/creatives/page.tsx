@@ -32,7 +32,8 @@ export default async function CreativesPage({
   const agg = await prisma.insight.groupBy({
     by: ["adId"],
     where: { level: "ad", adId: { in: adIds }, date: { gte: range.from, lte: range.to } },
-    _sum: { spend: true, leads: true, clicks: true, impressions: true },
+    _sum: { spend: true, leads: true, clicks: true, impressions: true, videoPlays: true, videoP25: true, videoP50: true, videoP75: true, videoP100: true, thruPlays: true },
+    _avg: { videoAvgWatchSec: true },
   });
   const aggMap = new Map(agg.map((a) => [a.adId, a]));
 
@@ -43,12 +44,31 @@ export default async function CreativesPage({
       const leads = stats?._sum.leads ?? 0;
       const clicks = stats?._sum.clicks ?? 0;
       const impressions = stats?._sum.impressions ?? 0;
+      const videoPlays = stats?._sum.videoPlays ?? null;
+      const videoP25 = stats?._sum.videoP25 ?? null;
+      const videoP50 = stats?._sum.videoP50 ?? null;
+      const videoP75 = stats?._sum.videoP75 ?? null;
+      const videoP100 = stats?._sum.videoP100 ?? null;
+      const thruPlays = stats?._sum.thruPlays ?? null;
+      const videoAvgWatchSec = stats?._avg.videoAvgWatchSec ?? null;
+      const hookRate = videoPlays && videoP25 ? (videoP25 / videoPlays) * 100 : null;
+      const completionRate = videoPlays && videoP100 ? (videoP100 / videoPlays) * 100 : null;
       return {
         ...a,
         spend,
         leads,
         cpl: calcCPL(spend, leads),
         ctr: calcCTR(clicks, impressions),
+        videoPlays,
+        videoAvgWatchSec,
+        videoP25,
+        videoP50,
+        videoP75,
+        videoP100,
+        thruPlays,
+        hookRate,
+        completionRate,
+        isVideo: videoPlays !== null && videoPlays > 0,
       };
     })
     .filter((r) => r.spend > 0)
@@ -137,6 +157,55 @@ export default async function CreativesPage({
                   <div className="text-[12px] font-semibold tabular-nums">{ad.ctr.toFixed(2)}%</div>
                 </div>
               </div>
+
+              {/* Video metrics — only shown for video ads */}
+              {ad.isVideo && (
+                <div className="mt-3 pt-3 border-t border-[var(--border)]">
+                  <div className="text-[9.5px] text-[var(--text-muted)] uppercase tracking-wide mb-2">Video performance</div>
+                  <div className="grid grid-cols-4 gap-1 text-center mb-2">
+                    <div>
+                      <div className="text-[9px] text-[var(--text-muted)]">Plays</div>
+                      <div className="text-[11.5px] font-semibold tabular-nums">{ad.videoPlays?.toLocaleString("en-IN") ?? "—"}</div>
+                    </div>
+                    <div>
+                      <div className="text-[9px] text-[var(--text-muted)]">Avg watch</div>
+                      <div className="text-[11.5px] font-semibold tabular-nums">{ad.videoAvgWatchSec !== null ? `${ad.videoAvgWatchSec.toFixed(1)}s` : "—"}</div>
+                    </div>
+                    <div>
+                      <div className="text-[9px] text-[var(--text-muted)]">Hook rate</div>
+                      <div className="text-[11.5px] font-semibold tabular-nums" style={{ color: ad.hookRate !== null ? (ad.hookRate >= 25 ? "var(--success)" : ad.hookRate >= 15 ? "var(--warning)" : "var(--danger)") : undefined }}>
+                        {ad.hookRate !== null ? `${ad.hookRate.toFixed(1)}%` : "—"}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-[9px] text-[var(--text-muted)]">Completed</div>
+                      <div className="text-[11.5px] font-semibold tabular-nums">{ad.completionRate !== null ? `${ad.completionRate.toFixed(1)}%` : "—"}</div>
+                    </div>
+                  </div>
+                  {/* Drop-off bar: 25 / 50 / 75 / 100 */}
+                  {ad.videoPlays && ad.videoPlays > 0 && (
+                    <div className="space-y-1">
+                      {[
+                        { label: "25%", val: ad.videoP25 },
+                        { label: "50%", val: ad.videoP50 },
+                        { label: "75%", val: ad.videoP75 },
+                        { label: "100%", val: ad.videoP100 },
+                      ].map(({ label, val }) => {
+                        const pct = val ? (val / ad.videoPlays!) * 100 : 0;
+                        return (
+                          <div key={label} className="flex items-center gap-1.5">
+                            <div className="text-[9px] text-[var(--text-muted)] w-6 text-right">{label}</div>
+                            <div className="flex-1 h-1.5 bg-[var(--surface-2)] rounded-full overflow-hidden">
+                              <div className="h-full bg-[var(--accent)] rounded-full" style={{ width: `${Math.min(pct, 100)}%` }} />
+                            </div>
+                            <div className="text-[9px] text-[var(--text-muted)] w-8">{pct.toFixed(0)}%</div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           </div>
         ))}

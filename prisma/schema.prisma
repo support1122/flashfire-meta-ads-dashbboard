@@ -67,6 +67,13 @@ model Insight {
   cpm         Float    @default(0)
   leads       Int      @default(0)
   cpl         Float?
+  videoPlays      Int?
+  videoAvgWatchSec Float?
+  videoP25    Int?
+  videoP50    Int?
+  videoP75    Int?
+  videoP100   Int?
+  thruPlays   Int?
   placement   String?
   ageGender   String?
   createdAt   DateTime @default(now())
