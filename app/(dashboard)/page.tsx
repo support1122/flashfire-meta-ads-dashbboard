@@ -11,6 +11,8 @@ import {
   Hand,
   Users,
   TrendingUp,
+  BadgeDollarSign,
+  Percent,
 } from "lucide-react";
 import { prisma } from "@/lib/db";
 import { parseDateRange } from "@/lib/query-helpers";
@@ -164,6 +166,14 @@ export default async function OverviewPage({
     sparkMap.set(r.campaignId, arr);
   }
 
+  const USD_TO_INR = 90;
+  const CAD_TO_INR = 60;
+  function toINR(amount: number, currency: string): number {
+    const cur = (currency || "usd").toUpperCase();
+    if (cur === "CAD") return amount * CAD_TO_INR;
+    if (cur === "INR") return amount;
+    return amount * USD_TO_INR;
+  }
   function fmtRevenue(amount: number, currency: string): string {
     const cur = (currency || "usd").toUpperCase();
     const n = amount.toLocaleString("en-US", { maximumFractionDigits: 0 });
@@ -173,7 +183,7 @@ export default async function OverviewPage({
     return `${cur} ${n}`;
   }
 
-  type CrmEntry = { meetings: number; paid: number; revenueDisplay: string };
+  type CrmEntry = { meetings: number; paid: number; revenueDisplay: string; revenueINR: number };
   let crmMap: Map<string, CrmEntry> = new Map();
   try {
     const db = await getCrmDb();
@@ -211,14 +221,15 @@ export default async function OverviewPage({
     ]);
     for (const r of meetingsAgg) {
       const key = String(r._id).trim().toLowerCase();
-      const cur = crmMap.get(key) ?? { meetings: 0, paid: 0, revenueDisplay: "" };
+      const cur = crmMap.get(key) ?? { meetings: 0, paid: 0, revenueDisplay: "", revenueINR: 0 };
       cur.meetings = r.meetings;
       crmMap.set(key, cur);
     }
     for (const r of paidAgg) {
       const key = String(r._id.campaign).trim().toLowerCase();
-      const cur = crmMap.get(key) ?? { meetings: 0, paid: 0, revenueDisplay: "" };
+      const cur = crmMap.get(key) ?? { meetings: 0, paid: 0, revenueDisplay: "", revenueINR: 0 };
       cur.paid += r.paid;
+      cur.revenueINR += toINR(r.total, r._id.currency);
       const part = fmtRevenue(r.total, r._id.currency);
       cur.revenueDisplay = cur.revenueDisplay ? `${cur.revenueDisplay} + ${part}` : part;
       crmMap.set(key, cur);
@@ -226,6 +237,11 @@ export default async function OverviewPage({
   } catch (e) {
     console.error("CRM funnel fetch failed (overview)", e);
   }
+
+  // Account-level ROAS & ROI (sum across all campaigns)
+  const totalRevenueINR = Array.from(crmMap.values()).reduce((s, v) => s + v.revenueINR, 0);
+  const accountRoas = spend > 0 && totalRevenueINR > 0 ? totalRevenueINR / spend : null;
+  const accountRoi = spend > 0 && totalRevenueINR > 0 ? ((totalRevenueINR - spend) / spend) * 100 : null;
 
   const accountAvgCpl = cpl;
   const accountAvgCtr = ctr;
@@ -244,7 +260,9 @@ export default async function OverviewPage({
       else if (cCpl > accountAvgCpl) health = "watch";
       else if (cCpl <= accountAvgCpl && cCtr >= accountAvgCtr) health = "good";
     }
-    const crm = crmMap.get(c.name.trim().toLowerCase()) ?? { meetings: 0, paid: 0, revenueDisplay: "" };
+    const crm = crmMap.get(c.name.trim().toLowerCase()) ?? { meetings: 0, paid: 0, revenueDisplay: "", revenueINR: 0 };
+    const roas = cSpend > 0 && crm.revenueINR > 0 ? crm.revenueINR / cSpend : null;
+    const roi = cSpend > 0 && crm.revenueINR > 0 ? ((crm.revenueINR - cSpend) / cSpend) * 100 : null;
     return {
       id: c.id,
       name: c.name,
@@ -262,6 +280,8 @@ export default async function OverviewPage({
       meetings: crm.meetings,
       paid: crm.paid,
       revenue: crm.revenueDisplay,
+      roas,
+      roi,
     };
   }).sort((a, b) => b.spend - a.spend);
 
@@ -291,6 +311,8 @@ export default async function OverviewPage({
         <KpiCard icon={<Hand size={13} />} label="Clicks" value={clicks.toLocaleString("en-IN")} deltaLabel={pctLabel(calcPercentChange(clicks, prevClicks), "vs prev period")} direction={direction(calcPercentChange(clicks, prevClicks))} />
         <KpiCard icon={<TrendingUp size={13} />} label="Lead Rate" value={`${leadRate.toFixed(2)}%`} subtitle="Leads ÷ Clicks" deltaLabel={pctLabel(calcPercentChange(leadRate, prevLeadRate), "vs prev period")} direction={direction(calcPercentChange(leadRate, prevLeadRate))} />
         <KpiCard icon={<Users size={13} />} label="Reach" value={reach.toLocaleString("en-IN")} tooltip="Are you reaching new people or burning the same audience? If reach is flat but frequency is rising, refresh your creatives." deltaLabel={pctLabel(calcPercentChange(reach, prevReach), "vs prev period")} direction={direction(calcPercentChange(reach, prevReach))} />
+        <KpiCard icon={<BadgeDollarSign size={13} />} label="ROAS" value={accountRoas !== null ? `${accountRoas.toFixed(2)}x` : "—"} tooltip="Revenue ÷ Ad Spend (1 USD=₹90, 1 CAD=₹60). Only counts CRM-tracked paid clients." deltaLabel={accountRoas !== null ? (accountRoas >= 3 ? "Strong" : accountRoas >= 1 ? "Breaking even" : "Below breakeven") : "No paid data"} direction={accountRoas !== null ? (accountRoas >= 3 ? "up" : accountRoas >= 1 ? "flat" : "down") : "flat"} />
+        <KpiCard icon={<Percent size={13} />} label="ROI" value={accountRoi !== null ? `${accountRoi.toFixed(0)}%` : "—"} tooltip="(Revenue − Spend) ÷ Spend × 100" deltaLabel={accountRoi !== null ? (accountRoi >= 200 ? "Excellent" : accountRoi >= 0 ? "Profitable" : "Loss") : "No paid data"} direction={accountRoi !== null ? (accountRoi >= 0 ? "up" : "down") : "flat"} />
       </div>
 
       <div className="grid gap-5 mb-5" style={{ gridTemplateColumns: "2fr 1fr" }}>

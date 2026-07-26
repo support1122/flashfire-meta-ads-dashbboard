@@ -28,7 +28,16 @@ export default async function CampaignsPage({
   ]);
   const campaignIds = campaigns.map((c) => c.id);
 
-  // Fetch CRM funnel data from MongoDB
+  const USD_TO_INR = 90;
+  const CAD_TO_INR = 60;
+
+  function toINR(amount: number, currency: string): number {
+    const cur = (currency || "usd").toUpperCase();
+    if (cur === "CAD") return amount * CAD_TO_INR;
+    if (cur === "INR") return amount;
+    return amount * USD_TO_INR; // USD default
+  }
+
   function fmtRevenue(amount: number, currency: string): string {
     const cur = (currency || "usd").toUpperCase();
     const n = amount.toLocaleString("en-US", { maximumFractionDigits: 0 });
@@ -38,7 +47,7 @@ export default async function CampaignsPage({
     return `${cur} ${n}`;
   }
 
-  type CrmEntry = { meetings: number; paid: number; revenueDisplay: string };
+  type CrmEntry = { meetings: number; paid: number; revenueDisplay: string; revenueINR: number };
   let crmMap: Map<string, CrmEntry> = new Map();
   try {
     const db = await getCrmDb();
@@ -76,14 +85,15 @@ export default async function CampaignsPage({
     ]);
     for (const r of meetingsAgg) {
       const key = String(r._id).trim().toLowerCase();
-      const cur = crmMap.get(key) ?? { meetings: 0, paid: 0, revenueDisplay: "" };
+      const cur = crmMap.get(key) ?? { meetings: 0, paid: 0, revenueDisplay: "", revenueINR: 0 };
       cur.meetings = r.meetings;
       crmMap.set(key, cur);
     }
     for (const r of paidAgg) {
       const key = String(r._id.campaign).trim().toLowerCase();
-      const cur = crmMap.get(key) ?? { meetings: 0, paid: 0, revenueDisplay: "" };
+      const cur = crmMap.get(key) ?? { meetings: 0, paid: 0, revenueDisplay: "", revenueINR: 0 };
       cur.paid += r.paid;
+      cur.revenueINR += toINR(r.total, r._id.currency);
       const part = fmtRevenue(r.total, r._id.currency);
       cur.revenueDisplay = cur.revenueDisplay ? `${cur.revenueDisplay} + ${part}` : part;
       crmMap.set(key, cur);
@@ -140,7 +150,9 @@ export default async function CampaignsPage({
       else if (cpl > accountAvgCpl) health = "watch";
       else if (cpl <= accountAvgCpl && ctr >= accountAvgCtr) health = "good";
     }
-    const crm = crmMap.get(c.name.trim().toLowerCase()) ?? { meetings: 0, paid: 0, revenueDisplay: "" };
+    const crm = crmMap.get(c.name.trim().toLowerCase()) ?? { meetings: 0, paid: 0, revenueDisplay: "", revenueINR: 0 };
+    const roas = spend > 0 && crm.revenueINR > 0 ? crm.revenueINR / spend : null;
+    const roi = spend > 0 && crm.revenueINR > 0 ? ((crm.revenueINR - spend) / spend) * 100 : null;
     return {
       id: c.id,
       name: c.name,
@@ -158,6 +170,8 @@ export default async function CampaignsPage({
       meetings: crm.meetings,
       paid: crm.paid,
       revenue: crm.revenueDisplay,
+      roas,
+      roi,
     };
   });
 

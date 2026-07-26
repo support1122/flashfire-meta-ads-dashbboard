@@ -20,6 +20,8 @@ interface CampaignRow {
   meetings?: number;
   paid?: number;
   revenue?: string;
+  roas?: number | null;
+  roi?: number | null;
 }
 
 const healthDot: Record<string, string> = {
@@ -65,6 +67,8 @@ export default function CampaignTable({ rows }: { rows: CampaignRow[] }) {
             <th className="text-right py-2.5 px-3 text-[var(--text-muted)] font-medium">Meetings</th>
             <th className="text-right py-2.5 px-3 text-[var(--text-muted)] font-medium">Paid</th>
             <th className="text-right py-2.5 px-3 text-[var(--text-muted)] font-medium">Revenue</th>
+            <th className="text-right py-2.5 px-3 text-[var(--text-muted)] font-medium">ROAS</th>
+            <th className="text-right py-2.5 px-3 text-[var(--text-muted)] font-medium">ROI</th>
             <th className="text-right py-2.5 px-3 text-[var(--text-muted)] font-medium">CTR</th>
             <th className="text-right py-2.5 px-3 text-[var(--text-muted)] font-medium">CPC</th>
             <th className="text-right py-2.5 px-3 text-[var(--text-muted)] font-medium">CPL</th>
@@ -99,6 +103,12 @@ export default function CampaignTable({ rows }: { rows: CampaignRow[] }) {
                 <td className="py-3 px-3 text-right tabular-nums text-[var(--text-2)]">{row.meetings ?? 0}</td>
                 <td className="py-3 px-3 text-right tabular-nums font-medium" style={{ color: (row.paid ?? 0) > 0 ? "var(--success)" : undefined }}>{row.paid ?? 0}</td>
                 <td className="py-3 px-3 text-right tabular-nums text-[var(--text-2)]">{row.revenue || "—"}</td>
+                <td className="py-3 px-3 text-right tabular-nums font-medium" style={{ color: row.roas ? (row.roas >= 3 ? "var(--success)" : row.roas >= 1 ? "var(--warning)" : "var(--danger)") : undefined }}>
+                  {row.roas != null ? `${row.roas.toFixed(2)}x` : "—"}
+                </td>
+                <td className="py-3 px-3 text-right tabular-nums font-medium" style={{ color: row.roi != null ? (row.roi >= 200 ? "var(--success)" : row.roi >= 0 ? "var(--warning)" : "var(--danger)") : undefined }}>
+                  {row.roi != null ? `${row.roi.toFixed(0)}%` : "—"}
+                </td>
                 <td className="py-3 px-3 text-right tabular-nums text-[var(--text-2)]">{row.ctr.toFixed(2)}%</td>
                 <td className="py-3 px-3 text-right tabular-nums text-[var(--text-2)]">
                   {row.cpc ? fmt(row.cpc) : "—"}
