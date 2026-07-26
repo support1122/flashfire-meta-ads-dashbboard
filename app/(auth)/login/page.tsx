@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -18,7 +19,7 @@ function LoginForm() {
       const res = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ password }),
+        body: JSON.stringify({ username, password }),
       });
       const json = await res.json();
       if (!json.ok) {
@@ -42,18 +43,26 @@ function LoginForm() {
         className="w-full max-w-sm bg-[var(--surface)] border border-[var(--border)] rounded-[10px] p-8 shadow-sm"
       >
         <div className="flex items-center gap-2 font-semibold text-[15px] mb-6">
-          <span className="text-[var(--accent)] text-xl">◆</span> Meta ads dashboard
+          <span className="text-[var(--accent)] text-xl">◆</span> Meta Ads Dashboard
         </div>
-        <label className="block text-xs font-medium text-[var(--text-2)] mb-1.5">
-          Password
-        </label>
+        <label className="block text-xs font-medium text-[var(--text-2)] mb-1.5">Username</label>
+        <input
+          type="text"
+          value={username}
+          onChange={(e) => setUsername(e.target.value)}
+          autoFocus
+          autoComplete="username"
+          className="w-full border border-[var(--border)] rounded-lg px-3 py-2 text-sm mb-3 bg-[var(--surface)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]"
+          placeholder="Enter username"
+        />
+        <label className="block text-xs font-medium text-[var(--text-2)] mb-1.5">Password</label>
         <input
           type="password"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
-          autoFocus
+          autoComplete="current-password"
           className="w-full border border-[var(--border)] rounded-lg px-3 py-2 text-sm mb-3 bg-[var(--surface)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]"
-          placeholder="Enter dashboard password"
+          placeholder="Enter password"
         />
         {error && <p className="text-[var(--danger)] text-xs mb-3">{error}</p>}
         <button

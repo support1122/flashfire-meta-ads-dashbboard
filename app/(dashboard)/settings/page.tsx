@@ -1,17 +1,38 @@
 import { prisma } from "@/lib/db";
+import { verifySessionToken, COOKIE_NAME } from "@/lib/auth";
+import { cookies } from "next/headers";
+import UserManager from "@/components/UserManager";
 
 export const dynamic = "force-dynamic";
 
 export default async function SettingsPage() {
-  const recentSyncs = await prisma.syncLog.findMany({ orderBy: { createdAt: "desc" }, take: 10 });
+  const jar = await cookies();
+  const token = jar.get(COOKIE_NAME)?.value;
+  const session = token ? await verifySessionToken(token) : null;
+  const isAdmin = session?.role === "admin";
+
+  const [recentSyncs, users] = await Promise.all([
+    prisma.syncLog.findMany({ orderBy: { createdAt: "desc" }, take: 10 }),
+    isAdmin ? prisma.user.findMany({ select: { id: true, username: true, role: true, createdAt: true }, orderBy: { createdAt: "asc" } }) : Promise.resolve([]),
+  ]);
 
   return (
     <div>
       <div className="mb-5">
         <h1 className="text-[19px] font-semibold m-0">Settings</h1>
-        <div className="text-[12.5px] text-[var(--text-muted)] mt-0.5">Sync history and account info</div>
+        <div className="text-[12.5px] text-[var(--text-muted)] mt-0.5">Sync history · User management</div>
       </div>
 
+      {/* User Management — admin only */}
+      {isAdmin && (
+        <div className="bg-[var(--surface)] border border-[var(--border)] rounded-[10px] px-4.5 py-4 mb-5">
+          <div className="text-sm font-semibold mb-1">Access management</div>
+          <div className="text-[12px] text-[var(--text-muted)] mb-4">Create or revoke dashboard access for your team.</div>
+          <UserManager initialUsers={users} currentUsername={session!.username} />
+        </div>
+      )}
+
+      {/* Sync History */}
       <div className="bg-[var(--surface)] border border-[var(--border)] rounded-[10px] px-4.5 py-4">
         <div className="text-sm font-semibold mb-3.5">Recent syncs</div>
         <table className="w-full text-[13px] border-collapse">
@@ -33,15 +54,11 @@ export default async function SettingsPage() {
                     {s.status}
                   </span>
                 </td>
-                <td className="px-2.5 py-2.5 border-b border-[var(--border)] text-[var(--text-2)]">{s.message}</td>
+                <td className="px-2.5 py-2.5 border-b border-[var(--border)] text-[var(--text-2)] text-[11.5px]">{s.message}</td>
               </tr>
             ))}
             {recentSyncs.length === 0 && (
-              <tr>
-                <td colSpan={3} className="px-2.5 py-6 text-center text-[var(--text-muted)]">
-                  No syncs yet.
-                </td>
-              </tr>
+              <tr><td colSpan={3} className="px-2.5 py-6 text-center text-[var(--text-muted)]">No syncs yet.</td></tr>
             )}
           </tbody>
         </table>
