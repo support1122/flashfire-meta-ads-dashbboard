@@ -3,9 +3,6 @@ import { jwtVerify } from "jose";
 
 const COOKIE_NAME = "session";
 
-// Protects all dashboard routes (everything except /login, /api/auth/*, and Next internals/static assets).
-// Sync (/api/sync) is intentionally left open here since it's meant to be hit by a cron trigger without
-// a browser session; if exposing publicly, protect it with a separate secret header instead.
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
@@ -30,7 +27,6 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(loginUrl);
   }
 
-  // Expose the current pathname to layouts/pages (Next.js doesn't pass it directly).
   const requestHeaders = new Headers(request.headers);
   requestHeaders.set("x-pathname", pathname);
   return NextResponse.next({ request: { headers: requestHeaders } });
@@ -41,7 +37,8 @@ async function verify(token: string): Promise<boolean> {
     const secret = process.env.JWT_SECRET;
     if (!secret) return false;
     const { payload } = await jwtVerify(token, new TextEncoder().encode(secret));
-    return payload.authenticated === true;
+    // Support both old tokens (authenticated: true) and new tokens (userId + role)
+    return payload.authenticated === true || typeof payload.userId === "string";
   } catch {
     return false;
   }
