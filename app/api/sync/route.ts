@@ -36,77 +36,49 @@ async function runSync(lookbackDays: number) {
       fetchAds(),
     ]);
 
-    // Upsert campaigns, adsets, ads in parallel batches
-    await Promise.all(campaigns.map((c) =>
-      prisma.campaign.upsert({
-        where: { id: c.id },
-        create: {
-          id: c.id,
-          name: c.name,
-          objective: c.objective ?? null,
-          status: c.effective_status ?? c.status,
-          dailyBudget: c.daily_budget ? Number(c.daily_budget) / 100 : null,
-          lifetimeBudget: c.lifetime_budget ? Number(c.lifetime_budget) / 100 : null,
-        },
-        update: {
-          name: c.name,
-          objective: c.objective ?? null,
-          status: c.effective_status ?? c.status,
-          dailyBudget: c.daily_budget ? Number(c.daily_budget) / 100 : null,
-          lifetimeBudget: c.lifetime_budget ? Number(c.lifetime_budget) / 100 : null,
-        },
-      })
-    ));
+    // Upsert campaigns, adsets, ads using deleteMany+createMany to avoid connection pool exhaustion
+    await prisma.campaign.deleteMany({ where: { id: { in: campaigns.map((c) => c.id) } } });
+    await prisma.campaign.createMany({
+      data: campaigns.map((c) => ({
+        id: c.id,
+        name: c.name,
+        objective: c.objective ?? null,
+        status: c.effective_status ?? c.status,
+        dailyBudget: c.daily_budget ? Number(c.daily_budget) / 100 : null,
+        lifetimeBudget: c.lifetime_budget ? Number(c.lifetime_budget) / 100 : null,
+      })),
+      skipDuplicates: true,
+    });
 
     const campaignIds = new Set(campaigns.map((c) => c.id));
-    await Promise.all(
-      adSets
-        .filter((as) => campaignIds.has(as.campaign_id))
-        .map((as) =>
-          prisma.adSet.upsert({
-            where: { id: as.id },
-            create: {
-              id: as.id,
-              campaignId: as.campaign_id,
-              name: as.name,
-              status: as.effective_status ?? as.status,
-              dailyBudget: as.daily_budget ? Number(as.daily_budget) / 100 : null,
-            },
-            update: {
-              name: as.name,
-              status: as.effective_status ?? as.status,
-              dailyBudget: as.daily_budget ? Number(as.daily_budget) / 100 : null,
-            },
-          })
-        )
-    );
+    const filteredAdSets = adSets.filter((as) => campaignIds.has(as.campaign_id));
+    await prisma.adSet.deleteMany({ where: { id: { in: filteredAdSets.map((as) => as.id) } } });
+    await prisma.adSet.createMany({
+      data: filteredAdSets.map((as) => ({
+        id: as.id,
+        campaignId: as.campaign_id,
+        name: as.name,
+        status: as.effective_status ?? as.status,
+        dailyBudget: as.daily_budget ? Number(as.daily_budget) / 100 : null,
+      })),
+      skipDuplicates: true,
+    });
 
     const adSetIds = new Set(adSets.map((a) => a.id));
-    await Promise.all(
-      ads
-        .filter((ad) => adSetIds.has(ad.adset_id))
-        .map((ad) =>
-          prisma.ad.upsert({
-            where: { id: ad.id },
-            create: {
-              id: ad.id,
-              adSetId: ad.adset_id,
-              name: ad.name,
-              status: ad.effective_status ?? ad.status,
-              creativeThumbnailUrl: ad.creative?.thumbnail_url ?? null,
-              creativeTitle: ad.creative?.title ?? null,
-              creativeBody: ad.creative?.body ?? null,
-            },
-            update: {
-              name: ad.name,
-              status: ad.effective_status ?? ad.status,
-              creativeThumbnailUrl: ad.creative?.thumbnail_url ?? null,
-              creativeTitle: ad.creative?.title ?? null,
-              creativeBody: ad.creative?.body ?? null,
-            },
-          })
-        )
-    );
+    const filteredAds = ads.filter((ad) => adSetIds.has(ad.adset_id));
+    await prisma.ad.deleteMany({ where: { id: { in: filteredAds.map((ad) => ad.id) } } });
+    await prisma.ad.createMany({
+      data: filteredAds.map((ad) => ({
+        id: ad.id,
+        adSetId: ad.adset_id,
+        name: ad.name,
+        status: ad.effective_status ?? ad.status,
+        creativeThumbnailUrl: ad.creative?.thumbnail_url ?? null,
+        creativeTitle: ad.creative?.title ?? null,
+        creativeBody: ad.creative?.body ?? null,
+      })),
+      skipDuplicates: true,
+    });
 
     // Pull insights — incremental uses single window, full uses 90-day chunks
     const until = formatDate(new Date());
@@ -272,18 +244,19 @@ async function rebuildDailyAccountSummary(since: Date) {
     _sum: { spend: true, impressions: true, reach: true, clicks: true, leads: true },
   });
 
-  await Promise.all(rows.map((row) => {
+  if (rows.length === 0) return;
+
+  const data = rows.map((row) => {
     const spend = row._sum.spend ?? 0;
     const impressions = row._sum.impressions ?? 0;
     const reach = row._sum.reach ?? 0;
     const clicks = row._sum.clicks ?? 0;
     const leads = row._sum.leads ?? 0;
-    return prisma.dailyAccountSummary.upsert({
-      where: { date: row.date },
-      create: { date: row.date, spend, impressions, reach, clicks, ctr: calcCTR(clicks, impressions), cpc: calcCPC(spend, clicks), cpm: calcCPM(spend, impressions), leads, cpl: calcCPL(spend, leads) },
-      update: { spend, impressions, reach, clicks, ctr: calcCTR(clicks, impressions), cpc: calcCPC(spend, clicks), cpm: calcCPM(spend, impressions), leads, cpl: calcCPL(spend, leads) },
-    });
-  }));
+    return { date: row.date, spend, impressions, reach, clicks, ctr: calcCTR(clicks, impressions), cpc: calcCPC(spend, clicks), cpm: calcCPM(spend, impressions), leads, cpl: calcCPL(spend, leads) };
+  });
+
+  await prisma.dailyAccountSummary.deleteMany({ where: { date: { in: data.map((d) => d.date) } } });
+  await prisma.dailyAccountSummary.createMany({ data });
 }
 
 function formatDate(d: Date): string {
