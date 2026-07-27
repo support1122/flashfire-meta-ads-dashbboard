@@ -153,6 +153,7 @@ export default async function CampaignsPage({
     const crm = crmMap.get(c.name.trim().toLowerCase()) ?? { meetings: 0, paid: 0, revenueDisplay: "", revenueINR: 0 };
     const roas = spend > 0 && crm.revenueINR > 0 ? crm.revenueINR / spend : null;
     const roi = spend > 0 && crm.revenueINR > 0 ? ((crm.revenueINR - spend) / spend) * 100 : null;
+    const leadToMeeting = leads > 0 && crm.meetings > 0 ? (crm.meetings / leads) * 100 : null;
     return {
       id: c.id,
       name: c.name,
@@ -172,6 +173,7 @@ export default async function CampaignsPage({
       revenue: crm.revenueDisplay,
       roas,
       roi,
+      leadToMeeting,
     };
   });
 

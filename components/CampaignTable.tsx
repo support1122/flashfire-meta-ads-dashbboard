@@ -22,6 +22,7 @@ interface CampaignRow {
   revenue?: string;
   roas?: number | null;
   roi?: number | null;
+  leadToMeeting?: number | null;
 }
 
 const healthDot: Record<string, string> = {
@@ -65,6 +66,7 @@ export default function CampaignTable({ rows }: { rows: CampaignRow[] }) {
             <th className="text-right py-2.5 px-3 text-[var(--text-muted)] font-medium">Clicks</th>
             <th className="text-right py-2.5 px-3 text-[var(--text-muted)] font-medium">Leads</th>
             <th className="text-right py-2.5 px-3 text-[var(--text-muted)] font-medium">Meetings</th>
+            <th className="text-right py-2.5 px-3 text-[var(--text-muted)] font-medium">L→M %</th>
             <th className="text-right py-2.5 px-3 text-[var(--text-muted)] font-medium">Paid</th>
             <th className="text-right py-2.5 px-3 text-[var(--text-muted)] font-medium">Revenue</th>
             <th className="text-right py-2.5 px-3 text-[var(--text-muted)] font-medium">ROAS</th>
@@ -101,6 +103,9 @@ export default function CampaignTable({ rows }: { rows: CampaignRow[] }) {
                 </td>
                 <td className="py-3 px-3 text-right tabular-nums">{row.leads}</td>
                 <td className="py-3 px-3 text-right tabular-nums text-[var(--text-2)]">{row.meetings ?? 0}</td>
+                <td className="py-3 px-3 text-right tabular-nums font-medium" style={{ color: row.leadToMeeting != null ? (row.leadToMeeting >= 30 ? "var(--success)" : row.leadToMeeting >= 15 ? "var(--warning)" : "var(--danger)") : undefined }}>
+                  {row.leadToMeeting != null ? `${row.leadToMeeting.toFixed(1)}%` : "—"}
+                </td>
                 <td className="py-3 px-3 text-right tabular-nums font-medium" style={{ color: (row.paid ?? 0) > 0 ? "var(--success)" : undefined }}>{row.paid ?? 0}</td>
                 <td className="py-3 px-3 text-right tabular-nums text-[var(--text-2)]">{row.revenue || "—"}</td>
                 <td className="py-3 px-3 text-right tabular-nums font-medium" style={{ color: row.roas ? (row.roas >= 3 ? "var(--success)" : row.roas >= 1 ? "var(--warning)" : "var(--danger)") : undefined }}>
