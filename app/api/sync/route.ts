@@ -36,49 +36,34 @@ async function runSync(lookbackDays: number) {
       fetchAds(),
     ]);
 
-    // Upsert campaigns, adsets, ads using deleteMany+createMany to avoid connection pool exhaustion
-    await prisma.campaign.deleteMany({ where: { id: { in: campaigns.map((c) => c.id) } } });
-    await prisma.campaign.createMany({
-      data: campaigns.map((c) => ({
-        id: c.id,
-        name: c.name,
-        objective: c.objective ?? null,
-        status: c.effective_status ?? c.status,
-        dailyBudget: c.daily_budget ? Number(c.daily_budget) / 100 : null,
-        lifetimeBudget: c.lifetime_budget ? Number(c.lifetime_budget) / 100 : null,
-      })),
-      skipDuplicates: true,
-    });
+    // Upsert campaigns/adsets/ads sequentially to respect FK constraints
+    for (const c of campaigns) {
+      await prisma.campaign.upsert({
+        where: { id: c.id },
+        create: { id: c.id, name: c.name, objective: c.objective ?? null, status: c.effective_status ?? c.status, dailyBudget: c.daily_budget ? Number(c.daily_budget) / 100 : null, lifetimeBudget: c.lifetime_budget ? Number(c.lifetime_budget) / 100 : null },
+        update: { name: c.name, objective: c.objective ?? null, status: c.effective_status ?? c.status, dailyBudget: c.daily_budget ? Number(c.daily_budget) / 100 : null, lifetimeBudget: c.lifetime_budget ? Number(c.lifetime_budget) / 100 : null },
+      });
+    }
 
     const campaignIds = new Set(campaigns.map((c) => c.id));
     const filteredAdSets = adSets.filter((as) => campaignIds.has(as.campaign_id));
-    await prisma.adSet.deleteMany({ where: { id: { in: filteredAdSets.map((as) => as.id) } } });
-    await prisma.adSet.createMany({
-      data: filteredAdSets.map((as) => ({
-        id: as.id,
-        campaignId: as.campaign_id,
-        name: as.name,
-        status: as.effective_status ?? as.status,
-        dailyBudget: as.daily_budget ? Number(as.daily_budget) / 100 : null,
-      })),
-      skipDuplicates: true,
-    });
+    for (const as of filteredAdSets) {
+      await prisma.adSet.upsert({
+        where: { id: as.id },
+        create: { id: as.id, campaignId: as.campaign_id, name: as.name, status: as.effective_status ?? as.status, dailyBudget: as.daily_budget ? Number(as.daily_budget) / 100 : null },
+        update: { name: as.name, status: as.effective_status ?? as.status, dailyBudget: as.daily_budget ? Number(as.daily_budget) / 100 : null },
+      });
+    }
 
-    const adSetIds = new Set(adSets.map((a) => a.id));
+    const adSetIds = new Set(filteredAdSets.map((a) => a.id));
     const filteredAds = ads.filter((ad) => adSetIds.has(ad.adset_id));
-    await prisma.ad.deleteMany({ where: { id: { in: filteredAds.map((ad) => ad.id) } } });
-    await prisma.ad.createMany({
-      data: filteredAds.map((ad) => ({
-        id: ad.id,
-        adSetId: ad.adset_id,
-        name: ad.name,
-        status: ad.effective_status ?? ad.status,
-        creativeThumbnailUrl: ad.creative?.thumbnail_url ?? null,
-        creativeTitle: ad.creative?.title ?? null,
-        creativeBody: ad.creative?.body ?? null,
-      })),
-      skipDuplicates: true,
-    });
+    for (const ad of filteredAds) {
+      await prisma.ad.upsert({
+        where: { id: ad.id },
+        create: { id: ad.id, adSetId: ad.adset_id, name: ad.name, status: ad.effective_status ?? ad.status, creativeThumbnailUrl: ad.creative?.thumbnail_url ?? null, creativeTitle: ad.creative?.title ?? null, creativeBody: ad.creative?.body ?? null },
+        update: { name: ad.name, status: ad.effective_status ?? ad.status, creativeThumbnailUrl: ad.creative?.thumbnail_url ?? null, creativeTitle: ad.creative?.title ?? null, creativeBody: ad.creative?.body ?? null },
+      });
+    }
 
     // Pull insights — incremental uses single window, full uses 90-day chunks
     const until = formatDate(new Date());
