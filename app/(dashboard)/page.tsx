@@ -139,8 +139,9 @@ export default async function OverviewPage({
           metaCampaignName: { $ne: null },
           bookingStatus: { $ne: "not-scheduled" },
           $or: [
-            { bookingCreatedAt: { $gte: range.from, $lte: range.to } },
-            { scheduledEventStartTime: { $gte: range.from, $lte: range.to } },
+            { "metaRawData.created_time": { $gte: range.from.toISOString().slice(0, 10), $lte: range.to.toISOString().slice(0, 10) + "T23:59:59" } },
+            { $and: [{ "metaRawData.created_time": { $exists: false } }, { bookingCreatedAt: { $gte: range.from, $lte: range.to } }] },
+            { $and: [{ "metaRawData.created_time": null }, { bookingCreatedAt: { $gte: range.from, $lte: range.to } }] },
           ],
         },
       },
@@ -149,13 +150,7 @@ export default async function OverviewPage({
           _id: {
             $dateToString: {
               format: "%Y-%m-%d",
-              date: {
-                $cond: [
-                  { $and: [{ $ne: ["$bookingCreatedAt", null] }, { $gte: ["$bookingCreatedAt", range.from] }, { $lte: ["$bookingCreatedAt", range.to] }] },
-                  "$bookingCreatedAt",
-                  "$scheduledEventStartTime",
-                ],
-              },
+              date: "$bookingCreatedAt",
             },
           },
           count: { $sum: 1 },
@@ -236,8 +231,9 @@ export default async function OverviewPage({
             metaCampaignName: { $ne: null },
             bookingStatus: { $nin: ["not-scheduled"] },
             $or: [
-              { bookingCreatedAt: { $gte: range.from, $lte: range.to } },
-              { scheduledEventStartTime: { $gte: range.from, $lte: range.to } },
+              { "metaRawData.created_time": { $gte: range.from.toISOString().slice(0, 10), $lte: range.to.toISOString().slice(0, 10) + "T23:59:59" } },
+              { $and: [{ "metaRawData.created_time": { $exists: false } }, { bookingCreatedAt: { $gte: range.from, $lte: range.to } }] },
+              { $and: [{ "metaRawData.created_time": null }, { bookingCreatedAt: { $gte: range.from, $lte: range.to } }] },
             ],
           },
         },
