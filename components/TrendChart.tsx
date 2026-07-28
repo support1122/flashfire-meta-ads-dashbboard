@@ -18,6 +18,7 @@ interface TrendRow {
   leads: number;
   cpl: number | null;
   ctr: number;
+  meetings?: number;
 }
 
 type Granularity = "daily" | "weekly" | "monthly";
@@ -38,13 +39,14 @@ function monthKey(date: string) {
 function groupData(data: TrendRow[], granularity: Granularity): TrendRow[] {
   if (granularity === "daily") return data;
 
-  const buckets = new Map<string, { spend: number; leads: number; clicks: number; impressions: number }>();
+  const buckets = new Map<string, { spend: number; leads: number; meetings: number; clicks: number; impressions: number }>();
 
   for (const row of data) {
     const key = granularity === "weekly" ? weekKey(row.date) : monthKey(row.date);
-    const existing = buckets.get(key) ?? { spend: 0, leads: 0, clicks: 0, impressions: 0 };
+    const existing = buckets.get(key) ?? { spend: 0, leads: 0, meetings: 0, clicks: 0, impressions: 0 };
     existing.spend += row.spend;
     existing.leads += row.leads;
+    existing.meetings += row.meetings ?? 0;
     buckets.set(key, existing);
   }
 
@@ -54,6 +56,7 @@ function groupData(data: TrendRow[], granularity: Granularity): TrendRow[] {
       date: key,
       spend: v.spend,
       leads: v.leads,
+      meetings: v.meetings,
       cpl: v.leads > 0 ? v.spend / v.leads : null,
       ctr: 0,
     }));
@@ -128,11 +131,8 @@ export default function TrendChart({ data }: { data: TrendRow[] }) {
               tickFormatter={(v: number) => `₹${v.toFixed(0)}`}
               width={48}
             />
-            <YAxis
-              yAxisId="leads"
-              orientation="right"
-              hide
-            />
+            <YAxis yAxisId="leads" orientation="right" hide />
+            <YAxis yAxisId="meetings" orientation="right" hide />
             <Tooltip
               contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid var(--border)" }}
               labelFormatter={(v) => formatLabel(String(v), granularity)}
@@ -141,6 +141,7 @@ export default function TrendChart({ data }: { data: TrendRow[] }) {
                 if (name === "spend") return [`₹${v.toLocaleString("en-IN")}`, "Spend"];
                 if (name === "cpl") return [v != null ? `₹${v.toFixed(0)}` : "—", "CPL"];
                 if (name === "leads") return [String(v), "Leads"];
+                if (name === "meetings") return [String(v), "Meetings"];
                 return [String(v), String(name)];
               }}
             />
@@ -167,6 +168,14 @@ export default function TrendChart({ data }: { data: TrendRow[] }) {
               type="monotone"
               dataKey="leads"
               stroke="#10b981"
+              strokeWidth={1.5}
+              dot={false}
+            />
+            <Line
+              yAxisId="meetings"
+              type="monotone"
+              dataKey="meetings"
+              stroke="#8b5cf6"
               strokeWidth={1.5}
               dot={false}
             />

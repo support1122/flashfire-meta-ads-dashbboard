@@ -128,17 +128,58 @@ export default async function OverviewPage({
   const budgetPacing =
     totalDailyBudget > 0 && daysElapsed <= 31 ? spend / (totalDailyBudget * daysElapsed) : null;
 
+  // Meetings grouped by date from CRM
+  const meetingsByDate = new Map<string, number>();
+  try {
+    const db = await getCrmDb();
+    const coll = db.collection("campaignbookings");
+    const meetingRows = await coll.aggregate([
+      {
+        $match: {
+          metaCampaignName: { $ne: null },
+          bookingStatus: { $ne: "not-scheduled" },
+          $or: [
+            { bookingCreatedAt: { $gte: range.from, $lte: range.to } },
+            { scheduledEventStartTime: { $gte: range.from, $lte: range.to } },
+          ],
+        },
+      },
+      {
+        $group: {
+          _id: {
+            $dateToString: {
+              format: "%Y-%m-%d",
+              date: {
+                $cond: [
+                  { $and: [{ $ne: ["$bookingCreatedAt", null] }, { $gte: ["$bookingCreatedAt", range.from] }, { $lte: ["$bookingCreatedAt", range.to] }] },
+                  "$bookingCreatedAt",
+                  "$scheduledEventStartTime",
+                ],
+              },
+            },
+          },
+          count: { $sum: 1 },
+        },
+      },
+    ]).toArray();
+    for (const r of meetingRows) meetingsByDate.set(String(r._id), r.count);
+  } catch (e) {
+    console.error("CRM meetings trend fetch failed", e);
+  }
+
   const trendData = trendRows.map((r) => {
     const s = r._sum.spend ?? 0;
     const l = r._sum.leads ?? 0;
     const c = r._sum.clicks ?? 0;
     const i = r._sum.impressions ?? 0;
+    const dateStr = r.date.toISOString().slice(0, 10);
     return {
-      date: r.date.toISOString().slice(0, 10),
+      date: dateStr,
       spend: s,
       leads: l,
       cpl: l > 0 ? s / l : null,
       ctr: i > 0 ? (c / i) * 100 : 0,
+      meetings: meetingsByDate.get(dateStr) ?? 0,
     };
   });
 
