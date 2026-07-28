@@ -193,7 +193,7 @@ export default async function OverviewPage({
         {
           $match: {
             metaCampaignName: { $ne: null },
-            bookingStatus: { $in: ["completed", "paid", "no-show", "canceled", "rescheduled"] },
+            bookingStatus: { $in: ["completed", "paid", "no-show", "canceled", "rescheduled", "scheduled"] },
             $or: [
               { bookingCreatedAt: { $gte: range.from, $lte: range.to } },
               { scheduledEventStartTime: { $gte: range.from, $lte: range.to } },
