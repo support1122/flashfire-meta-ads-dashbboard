@@ -75,7 +75,7 @@ export default function CampaignTable({ rows }: { rows: CampaignRow[] }) {
             <th className="text-right py-2.5 px-3 text-[var(--text-muted)] font-medium">CTR</th>
             <th className="text-right py-2.5 px-3 text-[var(--text-muted)] font-medium">CPC</th>
             <th className="text-right py-2.5 px-3 text-[var(--text-muted)] font-medium">CPL</th>
-            <th className="text-right py-2.5 px-3 text-[var(--text-muted)] font-medium">CPM</th>
+            <th className="text-right py-2.5 px-3 text-[var(--text-muted)] font-medium">Cost/Meet</th>
             <th className="text-center py-2.5 px-3 text-[var(--text-muted)] font-medium">Health</th>
             <th className="text-right py-2.5 pl-3 text-[var(--text-muted)] font-medium">Spend trend</th>
           </tr>
