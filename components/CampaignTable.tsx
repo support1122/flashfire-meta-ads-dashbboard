@@ -23,6 +23,7 @@ interface CampaignRow {
   roas?: number | null;
   roi?: number | null;
   leadToMeeting?: number | null;
+  cac?: number | null;
 }
 
 const healthDot: Record<string, string> = {
@@ -76,6 +77,7 @@ export default function CampaignTable({ rows }: { rows: CampaignRow[] }) {
             <th className="text-right py-2.5 px-3 text-[var(--text-muted)] font-medium">CPC</th>
             <th className="text-right py-2.5 px-3 text-[var(--text-muted)] font-medium">CPL</th>
             <th className="text-right py-2.5 px-3 text-[var(--text-muted)] font-medium">Cost/Meet</th>
+            <th className="text-right py-2.5 px-3 text-[var(--text-muted)] font-medium">CAC</th>
             <th className="text-center py-2.5 px-3 text-[var(--text-muted)] font-medium">Health</th>
             <th className="text-right py-2.5 pl-3 text-[var(--text-muted)] font-medium">Spend trend</th>
           </tr>
@@ -127,6 +129,9 @@ export default function CampaignTable({ rows }: { rows: CampaignRow[] }) {
                   {row.meetings && row.meetings > 0
                     ? fmt(Math.round(row.spend / row.meetings))
                     : "—"}
+                </td>
+                <td className="py-3 px-3 text-right tabular-nums font-medium" style={{ color: row.cac != null ? "var(--text)" : undefined }}>
+                  {row.cac != null ? fmt(Math.round(row.cac)) : "—"}
                 </td>
                 <td className="py-3 px-3 text-center">
                   <span className={`inline-block px-2 py-0.5 rounded text-[10.5px] font-medium ${h.cls}`}>

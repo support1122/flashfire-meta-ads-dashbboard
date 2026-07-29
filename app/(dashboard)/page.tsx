@@ -278,6 +278,8 @@ export default async function OverviewPage({
   // Account-level ROAS, ROI, Lead→Meeting %
   const totalRevenueINR = Array.from(crmMap.values()).reduce((s, v) => s + v.revenueINR, 0);
   const totalMeetings = Array.from(crmMap.values()).reduce((s, v) => s + v.meetings, 0);
+  const totalPaid = Array.from(crmMap.values()).reduce((s, v) => s + v.paid, 0);
+  const accountCac = spend > 0 && totalPaid > 0 ? spend / totalPaid : null;
   const accountRoas = spend > 0 && totalRevenueINR > 0 ? totalRevenueINR / spend : null;
   const accountRoi = spend > 0 && totalRevenueINR > 0 ? ((totalRevenueINR - spend) / spend) * 100 : null;
   const accountLeadToMeeting = leads > 0 && totalMeetings > 0 ? (totalMeetings / leads) * 100 : null;
@@ -303,6 +305,7 @@ export default async function OverviewPage({
     const roas = cSpend > 0 && crm.revenueINR > 0 ? crm.revenueINR / cSpend : null;
     const roi = cSpend > 0 && crm.revenueINR > 0 ? ((crm.revenueINR - cSpend) / cSpend) * 100 : null;
     const leadToMeeting = cLeads > 0 && crm.meetings > 0 ? (crm.meetings / cLeads) * 100 : null;
+    const cac = cSpend > 0 && crm.paid > 0 ? cSpend / crm.paid : null;
     return {
       id: c.id,
       name: c.name,
@@ -323,6 +326,7 @@ export default async function OverviewPage({
       roas,
       roi,
       leadToMeeting,
+      cac,
     };
   }).sort((a, b) => b.spend - a.spend);
 
@@ -355,6 +359,7 @@ export default async function OverviewPage({
         <KpiCard icon={<BadgeDollarSign size={13} />} label="ROAS" value={accountRoas !== null ? `${accountRoas.toFixed(2)}x` : "—"} tooltip="Revenue ÷ Ad Spend (1 USD=₹90, 1 CAD=₹60). Only counts CRM-tracked paid clients." deltaLabel={accountRoas !== null ? (accountRoas >= 3 ? "Strong" : accountRoas >= 1 ? "Breaking even" : "Below breakeven") : "No paid data"} direction={accountRoas !== null ? (accountRoas >= 3 ? "up" : accountRoas >= 1 ? "flat" : "down") : "flat"} />
         <KpiCard icon={<Percent size={13} />} label="ROI" value={accountRoi !== null ? `${accountRoi.toFixed(0)}%` : "—"} tooltip="(Revenue − Spend) ÷ Spend × 100" deltaLabel={accountRoi !== null ? (accountRoi >= 200 ? "Excellent" : accountRoi >= 0 ? "Profitable" : "Loss") : "No paid data"} direction={accountRoi !== null ? (accountRoi >= 0 ? "up" : "down") : "flat"} />
         <KpiCard icon={<Users size={13} />} label="Lead → Meeting" value={accountLeadToMeeting !== null ? `${accountLeadToMeeting.toFixed(1)}%` : "—"} subtitle={`${totalMeetings} meetings / ${leads} leads`} tooltip="% of leads who booked a meeting. Higher = better quality traffic or better follow-up." deltaLabel={accountLeadToMeeting !== null ? (accountLeadToMeeting >= 30 ? "Strong" : accountLeadToMeeting >= 15 ? "Average" : "Low") : "No CRM data"} direction={accountLeadToMeeting !== null ? (accountLeadToMeeting >= 30 ? "up" : accountLeadToMeeting >= 15 ? "flat" : "down") : "flat"} />
+        <KpiCard icon={<BadgeDollarSign size={13} />} label="CAC" value={accountCac !== null ? formatINR(accountCac) : "—"} subtitle={totalPaid > 0 ? `${totalPaid} paid clients` : undefined} tooltip="Cost to acquire one paying customer = Total Spend ÷ Paid clients." deltaLabel={accountCac !== null ? "spend ÷ paid clients" : "No paid clients yet"} direction="flat" />
       </div>
 
       <div className="grid gap-5 mb-5" style={{ gridTemplateColumns: "2fr 1fr" }}>
