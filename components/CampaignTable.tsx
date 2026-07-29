@@ -75,8 +75,8 @@ export default function CampaignTable({ rows }: { rows: CampaignRow[] }) {
             <th className="text-right py-2.5 px-3 text-[var(--text-muted)] font-medium">CTR</th>
             <th className="text-right py-2.5 px-3 text-[var(--text-muted)] font-medium">CPC</th>
             <th className="text-right py-2.5 px-3 text-[var(--text-muted)] font-medium">CPL</th>
-            <th className="text-center py-2.5 px-3 text-[var(--text-muted)] font-medium">Health</th>
             <th className="text-right py-2.5 px-3 text-[var(--text-muted)] font-medium">CPM</th>
+            <th className="text-center py-2.5 px-3 text-[var(--text-muted)] font-medium">Health</th>
             <th className="text-right py-2.5 pl-3 text-[var(--text-muted)] font-medium">Spend trend</th>
           </tr>
         </thead>
@@ -123,15 +123,15 @@ export default function CampaignTable({ rows }: { rows: CampaignRow[] }) {
                 <td className="py-3 px-3 text-right tabular-nums">
                   {row.cpl !== null ? fmt(row.cpl) : "—"}
                 </td>
-                <td className="py-3 px-3 text-center">
-                  <span className={`inline-block px-2 py-0.5 rounded text-[10.5px] font-medium ${h.cls}`}>
-                    {h.label}
-                  </span>
-                </td>
                 <td className="py-3 px-3 text-right tabular-nums font-medium">
                   {row.meetings && row.meetings > 0
                     ? fmt(Math.round(row.spend / row.meetings))
                     : "—"}
+                </td>
+                <td className="py-3 px-3 text-center">
+                  <span className={`inline-block px-2 py-0.5 rounded text-[10.5px] font-medium ${h.cls}`}>
+                    {h.label}
+                  </span>
                 </td>
                 <td className="py-3 pl-3 text-right">
                   <SparklineBar data={row.sparkline} />
