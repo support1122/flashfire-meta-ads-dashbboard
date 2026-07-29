@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { SparklineBar } from "@/components/SparklineBar";
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, LabelList } from "recharts";
 
 interface CampaignRow {
   id: string;
@@ -47,6 +48,73 @@ function fmt(n: number) {
   return `₹${n.toLocaleString("en-IN", { maximumFractionDigits: 0 })}`;
 }
 
+function CpmChart({ rows }: { rows: CampaignRow[] }) {
+  const data = rows
+    .map((r) => ({
+      name: r.name.length > 22 ? r.name.slice(0, 20) + "…" : r.name,
+      cpm: r.meetings && r.meetings > 0 ? Math.round(r.spend / r.meetings) : null,
+    }))
+    .filter((d) => d.cpm !== null)
+    .sort((a, b) => (a.cpm ?? 0) - (b.cpm ?? 0));
+
+  if (data.length === 0) return null;
+
+  const min = Math.min(...data.map((d) => d.cpm ?? 0));
+  const max = Math.max(...data.map((d) => d.cpm ?? 0));
+
+  return (
+    <div className="mb-6">
+      <div className="text-[13px] font-semibold mb-1">Cost Per Meeting — by Campaign</div>
+      <div className="text-[11.5px] text-[var(--text-muted)] mb-3">Lower is better · spend ÷ meetings</div>
+      <div style={{ height: data.length * 36 + 40 }}>
+        <ResponsiveContainer width="100%" height="100%">
+          <BarChart data={data} layout="vertical" margin={{ top: 0, right: 64, left: 8, bottom: 0 }}>
+            <XAxis
+              type="number"
+              tick={{ fontSize: 10, fill: "var(--text-muted)" }}
+              tickFormatter={(v: number) => `₹${v >= 1000 ? `${(v / 1000).toFixed(0)}k` : v}`}
+              axisLine={false}
+              tickLine={false}
+            />
+            <YAxis
+              type="category"
+              dataKey="name"
+              tick={{ fontSize: 11, fill: "var(--text-2)" }}
+              width={180}
+              axisLine={false}
+              tickLine={false}
+            />
+            <Tooltip
+              formatter={(v) => [`₹${Number(v).toLocaleString("en-IN")}`, "Cost/Meeting"]}
+              contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid var(--border)" }}
+            />
+            <Bar dataKey="cpm" radius={[0, 4, 4, 0]} maxBarSize={22}>
+              {data.map((d, i) => (
+                <Cell
+                  key={i}
+                  fill={
+                    d.cpm === min
+                      ? "var(--success)"
+                      : d.cpm === max
+                      ? "var(--danger)"
+                      : "var(--accent)"
+                  }
+                />
+              ))}
+              <LabelList
+                dataKey="cpm"
+                position="right"
+                formatter={(v) => `₹${Number(v).toLocaleString("en-IN")}`}
+                style={{ fontSize: 11, fill: "var(--text-2)" }}
+              />
+            </Bar>
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+    </div>
+  );
+}
+
 export default function CampaignTable({ rows }: { rows: CampaignRow[] }) {
   const router = useRouter();
 
@@ -55,6 +123,8 @@ export default function CampaignTable({ rows }: { rows: CampaignRow[] }) {
   }
 
   return (
+    <div>
+      <CpmChart rows={rows} />
     <div className="overflow-x-auto">
       <table className="w-full text-[12.5px] border-collapse">
         <thead>
@@ -75,6 +145,7 @@ export default function CampaignTable({ rows }: { rows: CampaignRow[] }) {
             <th className="text-right py-2.5 px-3 text-[var(--text-muted)] font-medium">CPC</th>
             <th className="text-right py-2.5 px-3 text-[var(--text-muted)] font-medium">CPL</th>
             <th className="text-center py-2.5 px-3 text-[var(--text-muted)] font-medium">Health</th>
+            <th className="text-right py-2.5 px-3 text-[var(--text-muted)] font-medium">CPM</th>
             <th className="text-right py-2.5 pl-3 text-[var(--text-muted)] font-medium">Spend trend</th>
           </tr>
         </thead>
@@ -126,6 +197,11 @@ export default function CampaignTable({ rows }: { rows: CampaignRow[] }) {
                     {h.label}
                   </span>
                 </td>
+                <td className="py-3 px-3 text-right tabular-nums font-medium">
+                  {row.meetings && row.meetings > 0
+                    ? fmt(Math.round(row.spend / row.meetings))
+                    : "—"}
+                </td>
                 <td className="py-3 pl-3 text-right">
                   <SparklineBar data={row.sparkline} />
                 </td>
@@ -134,6 +210,7 @@ export default function CampaignTable({ rows }: { rows: CampaignRow[] }) {
           })}
         </tbody>
       </table>
+    </div>
     </div>
   );
 }
