@@ -410,13 +410,30 @@ export default async function OverviewPage({
         </div>
 
         <div className="bg-[var(--surface)] border border-[var(--border)] rounded-[10px] px-4.5 py-4">
-          <div className="text-sm font-semibold mb-3.5">Alerts</div>
-          {alerts.length === 0 && (
-            <p className="text-[13px] text-[var(--text-muted)]">No active alerts.</p>
-          )}
-          {alerts.map((a) => (
-            <AlertCard key={a.id} severity={a.severity as "bad" | "watch" | "good"} title={a.title} body={a.body} />
-          ))}
+          <div className="mb-3.5">
+            <div className="text-sm font-semibold">Budget vs Spend</div>
+            <div className="text-xs text-[var(--text-muted)] mt-0.5">Independent of date range · today's spend &amp; 7-day avg vs Meta daily budget</div>
+          </div>
+          <table className="w-full text-[12.5px] border-collapse">
+            <thead>
+              <tr className="border-b border-[var(--border)]">
+                <th className="text-left py-2 pr-3 text-[var(--text-muted)] font-medium">Campaign</th>
+                <th className="text-right py-2 px-2 text-[var(--text-muted)] font-medium" title="Daily budget set in Meta Ads Manager">Budget/Day</th>
+                <th className="text-right py-2 px-2 text-[var(--text-muted)] font-medium" title="How much this campaign has spent so far today">Spent Today</th>
+                <th className="text-right py-2 pl-2 text-[var(--text-muted)] font-medium" title="Average daily spend over the last 7 days">Avg/Day (7d)</th>
+              </tr>
+            </thead>
+            <tbody>
+              {budgetRows.map((r) => (
+                <tr key={r.id} className="border-b border-[var(--border)] hover:bg-[var(--surface-2)]">
+                  <td className="py-2.5 pr-3 font-medium truncate max-w-[130px]">{r.name}</td>
+                  <td className="py-2.5 px-2 text-right tabular-nums">{formatINR(r.dailyBudget)}</td>
+                  <td className="py-2.5 px-2 text-right tabular-nums font-medium">{formatINR(r.todaySpend)}</td>
+                  <td className="py-2.5 pl-2 text-right tabular-nums text-[var(--text-2)]">{formatINR(Math.round(r.avg7))}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       </div>
 
@@ -433,42 +450,6 @@ export default async function OverviewPage({
         <CampaignTable rows={tableRows} />
       </div>
 
-      <div className="bg-[var(--surface)] border border-[var(--border)] rounded-[10px] px-4.5 py-4 mt-5">
-        <div className="mb-3.5">
-          <div className="text-sm font-semibold">Budget vs Spend</div>
-          <div className="text-xs text-[var(--text-muted)] mt-0.5">Independent of date range · always shows today's spend and 7-day average vs your Meta daily budget</div>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-[12.5px] border-collapse">
-            <thead>
-              <tr className="border-b border-[var(--border)]">
-                <th className="text-left py-2.5 pr-4 text-[var(--text-muted)] font-medium min-w-[180px]">Campaign</th>
-                <th className="text-right py-2.5 px-3 text-[var(--text-muted)] font-medium" title="Daily budget set in Meta Ads Manager">Budget/Day</th>
-                <th className="text-right py-2.5 px-3 text-[var(--text-muted)] font-medium" title="How much this campaign has spent so far today">Spent Today</th>
-                <th className="text-right py-2.5 px-3 text-[var(--text-muted)] font-medium" title="Average daily spend over the last 7 days = Last 7 days spend ÷ 7">Avg/Day (7d)</th>
-                <th className="text-right py-2.5 px-3 text-[var(--text-muted)] font-medium" title="Today's spend ÷ Daily budget × 100. Green = on track, Orange = under-delivering, Red = over-delivering">Pacing</th>
-              </tr>
-            </thead>
-            <tbody>
-              {budgetRows.map((r) => (
-                <tr key={r.id} className="border-b border-[var(--border)] hover:bg-[var(--surface-2)]">
-                  <td className="py-3 pr-4 font-medium">{r.name}</td>
-                  <td className="py-3 px-3 text-right tabular-nums">{formatINR(r.dailyBudget)}</td>
-                  <td className="py-3 px-3 text-right tabular-nums font-medium">{formatINR(r.todaySpend)}</td>
-                  <td className="py-3 px-3 text-right tabular-nums text-[var(--text-2)]">{formatINR(Math.round(r.avg7))}</td>
-                  <td className="py-3 px-3 text-right tabular-nums font-medium">
-                    {r.pacing !== null ? (
-                      <span className={`inline-block px-2 py-0.5 rounded text-[11px] font-medium ${r.pacing > 110 ? "bg-[var(--danger-bg)] text-[var(--danger)]" : r.pacing < 70 ? "bg-[var(--warning-bg)] text-[var(--warning)]" : "bg-[var(--success-bg)] text-[var(--success)]"}`}>
-                        {r.pacing.toFixed(0)}%
-                      </span>
-                    ) : "—"}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
     </div>
   );
 }
