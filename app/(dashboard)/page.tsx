@@ -92,7 +92,7 @@ export default async function OverviewPage({
     prisma.campaign.findMany({ select: { id: true, name: true }, orderBy: { name: "asc" } }),
     prisma.campaign.findMany({
       where: { status: "ACTIVE", ...(statusFilter ? { status: statusFilter } : {}) },
-      select: { id: true, name: true, status: true },
+      select: { id: true, name: true, status: true, dailyBudget: true },
       orderBy: { name: "asc" },
     }),
   ]);
@@ -335,6 +335,7 @@ export default async function OverviewPage({
       leadToMeeting,
       cac,
       avgDailySpend,
+      dailyBudget: c.dailyBudget ?? null,
     };
   }).sort((a, b) => b.spend - a.spend);
 

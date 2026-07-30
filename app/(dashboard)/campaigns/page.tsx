@@ -165,6 +165,7 @@ export default async function CampaignsPage({
       status: c.status,
       spend,
       avgDailySpend,
+      dailyBudget: c.dailyBudget ?? null,
       impressions,
       clicks,
       leads,
