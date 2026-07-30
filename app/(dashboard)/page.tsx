@@ -187,7 +187,14 @@ export default async function OverviewPage({
   // Campaign table rows for the top 8 campaigns (by name), with health flags computed against
   // the account average for the selected period.
   const campaignIds = campaignsForTable.map((c) => c.id);
-  const [perCampaignAgg, sparkRows] = await Promise.all([
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const todayEnd = new Date();
+  todayEnd.setHours(23, 59, 59, 999);
+  const sevenDaysAgo = new Date(today);
+  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6);
+
+  const [perCampaignAgg, sparkRows, todayAgg, last7Agg] = await Promise.all([
     prisma.insight.groupBy({
       by: ["campaignId"],
       where: { level: "campaign", campaignId: { in: campaignIds }, date: { gte: range.from, lte: range.to } },
@@ -198,8 +205,20 @@ export default async function OverviewPage({
       select: { campaignId: true, date: true, spend: true },
       orderBy: { date: "asc" },
     }),
+    prisma.insight.groupBy({
+      by: ["campaignId"],
+      where: { level: "campaign", campaignId: { in: campaignIds }, date: { gte: today, lte: todayEnd } },
+      _sum: { spend: true },
+    }),
+    prisma.insight.groupBy({
+      by: ["campaignId"],
+      where: { level: "campaign", campaignId: { in: campaignIds }, date: { gte: sevenDaysAgo, lte: todayEnd } },
+      _sum: { spend: true },
+    }),
   ]);
   const aggMap = new Map(perCampaignAgg.map((a) => [a.campaignId, a]));
+  const todayMap = new Map(todayAgg.map((a) => [a.campaignId, a._sum.spend ?? 0]));
+  const last7Map = new Map(last7Agg.map((a) => [a.campaignId, a._sum.spend ?? 0]));
   const sparkMap = new Map<string, number[]>();
   for (const r of sparkRows) {
     if (!r.campaignId) continue;
@@ -339,6 +358,16 @@ export default async function OverviewPage({
     };
   }).sort((a, b) => b.spend - a.spend);
 
+  const budgetRows = campaignsForTable
+    .filter((c) => c.dailyBudget && c.dailyBudget > 0)
+    .map((c) => {
+      const todaySpend = todayMap.get(c.id) ?? 0;
+      const avg7 = (last7Map.get(c.id) ?? 0) / 7;
+      const pacing = c.dailyBudget! > 0 ? (todaySpend / c.dailyBudget!) * 100 : null;
+      return { id: c.id, name: c.name, dailyBudget: c.dailyBudget!, todaySpend, avg7, pacing };
+    })
+    .sort((a, b) => b.dailyBudget - a.dailyBudget);
+
   return (
     <div>
       <div className="flex items-center justify-between flex-wrap gap-3 mb-5">
@@ -402,6 +431,43 @@ export default async function OverviewPage({
           <div className="text-xs text-[var(--text-muted)]">Click a row to drill into ad sets</div>
         </div>
         <CampaignTable rows={tableRows} />
+      </div>
+
+      <div className="bg-[var(--surface)] border border-[var(--border)] rounded-[10px] px-4.5 py-4 mt-5">
+        <div className="mb-3.5">
+          <div className="text-sm font-semibold">Budget vs Spend</div>
+          <div className="text-xs text-[var(--text-muted)] mt-0.5">Independent of date range · always shows today's spend and 7-day average vs your Meta daily budget</div>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-[12.5px] border-collapse">
+            <thead>
+              <tr className="border-b border-[var(--border)]">
+                <th className="text-left py-2.5 pr-4 text-[var(--text-muted)] font-medium min-w-[180px]">Campaign</th>
+                <th className="text-right py-2.5 px-3 text-[var(--text-muted)] font-medium" title="Daily budget set in Meta Ads Manager">Budget/Day</th>
+                <th className="text-right py-2.5 px-3 text-[var(--text-muted)] font-medium" title="How much this campaign has spent so far today">Spent Today</th>
+                <th className="text-right py-2.5 px-3 text-[var(--text-muted)] font-medium" title="Average daily spend over the last 7 days = Last 7 days spend ÷ 7">Avg/Day (7d)</th>
+                <th className="text-right py-2.5 px-3 text-[var(--text-muted)] font-medium" title="Today's spend ÷ Daily budget × 100. Green = on track, Orange = under-delivering, Red = over-delivering">Pacing</th>
+              </tr>
+            </thead>
+            <tbody>
+              {budgetRows.map((r) => (
+                <tr key={r.id} className="border-b border-[var(--border)] hover:bg-[var(--surface-2)]">
+                  <td className="py-3 pr-4 font-medium">{r.name}</td>
+                  <td className="py-3 px-3 text-right tabular-nums">{formatINR(r.dailyBudget)}</td>
+                  <td className="py-3 px-3 text-right tabular-nums font-medium">{formatINR(r.todaySpend)}</td>
+                  <td className="py-3 px-3 text-right tabular-nums text-[var(--text-2)]">{formatINR(Math.round(r.avg7))}</td>
+                  <td className="py-3 px-3 text-right tabular-nums font-medium">
+                    {r.pacing !== null ? (
+                      <span style={{ color: r.pacing > 110 ? "var(--danger)" : r.pacing < 70 ? "var(--warning)" : "var(--success)" }}>
+                        {r.pacing.toFixed(0)}%
+                      </span>
+                    ) : "—"}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   );
