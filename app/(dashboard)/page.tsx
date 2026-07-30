@@ -458,7 +458,7 @@ export default async function OverviewPage({
                   <td className="py-3 px-3 text-right tabular-nums text-[var(--text-2)]">{formatINR(Math.round(r.avg7))}</td>
                   <td className="py-3 px-3 text-right tabular-nums font-medium">
                     {r.pacing !== null ? (
-                      <span style={{ color: r.pacing > 110 ? "var(--danger)" : r.pacing < 70 ? "var(--warning)" : "var(--success)" }}>
+                      <span className={`inline-block px-2 py-0.5 rounded text-[11px] font-medium ${r.pacing > 110 ? "bg-[var(--danger-bg)] text-[var(--danger)]" : r.pacing < 70 ? "bg-[var(--warning-bg)] text-[var(--warning)]" : "bg-[var(--success-bg)] text-[var(--success)]"}`}>
                         {r.pacing.toFixed(0)}%
                       </span>
                     ) : "—"}
