@@ -312,6 +312,7 @@ export default async function OverviewPage({
     const roi = cSpend > 0 && crm.revenueINR > 0 ? ((crm.revenueINR - cSpend) / cSpend) * 100 : null;
     const leadToMeeting = cLeads > 0 && crm.meetings > 0 ? (crm.meetings / cLeads) * 100 : null;
     const cac = cSpend > 0 && crm.paid > 0 ? cSpend / crm.paid : null;
+    const avgDailySpend = cSpend / Math.max(1, prevLengthDays + 1);
     return {
       id: c.id,
       name: c.name,
@@ -333,6 +334,7 @@ export default async function OverviewPage({
       roi,
       leadToMeeting,
       cac,
+      avgDailySpend,
     };
   }).sort((a, b) => b.spend - a.spend);
 

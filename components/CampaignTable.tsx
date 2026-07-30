@@ -9,6 +9,7 @@ interface CampaignRow {
   objective?: string | null;
   status: string;
   spend: number;
+  avgDailySpend?: number | null;
   leads: number;
   cpl: number | null;
   ctr: number;
@@ -64,6 +65,7 @@ export default function CampaignTable({ rows }: { rows: CampaignRow[] }) {
             <th className="text-left py-2.5 pr-3 text-[var(--text-muted)] font-medium w-4" />
             <th className="text-left py-2.5 pr-4 text-[var(--text-muted)] font-medium min-w-[180px]">Campaign</th>
             <th className="text-right py-2.5 px-3 text-[var(--text-muted)] font-medium">Spend</th>
+            <th className="text-right py-2.5 px-3 text-[var(--text-muted)] font-medium">Avg/Day</th>
             <th className="text-right py-2.5 px-3 text-[var(--text-muted)] font-medium">Impressions</th>
             <th className="text-right py-2.5 px-3 text-[var(--text-muted)] font-medium">Clicks</th>
             <th className="text-right py-2.5 px-3 text-[var(--text-muted)] font-medium">Leads</th>
@@ -99,6 +101,9 @@ export default function CampaignTable({ rows }: { rows: CampaignRow[] }) {
                   <div className="text-[10.5px] text-[var(--text-muted)] mt-0.5">{row.status}{row.objective ? ` · ${row.objective}` : ""}</div>
                 </td>
                 <td className="py-3 px-3 text-right tabular-nums font-medium">{fmt(row.spend)}</td>
+                <td className="py-3 px-3 text-right tabular-nums text-[var(--text-muted)]">
+                  {row.avgDailySpend != null ? fmt(Math.round(row.avgDailySpend)) : "—"}
+                </td>
                 <td className="py-3 px-3 text-right tabular-nums text-[var(--text-2)]">
                   {row.impressions ? row.impressions.toLocaleString("en-IN") : "—"}
                 </td>

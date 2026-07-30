@@ -17,6 +17,7 @@ export default async function CampaignsPage({
     Object.entries(sp).filter(([, v]) => v !== undefined) as [string, string][]
   );
   const range = parseDateRange(params);
+  const daysInRange = Math.max(1, Math.round((range.to.getTime() - range.from.getTime()) / 86400000) + 1);
   const statusFilter = sp.status || undefined;
 
   const [campaigns, allCampaignsForFilter] = await Promise.all([
@@ -156,12 +157,14 @@ export default async function CampaignsPage({
     const roi = spend > 0 && crm.revenueINR > 0 ? ((crm.revenueINR - spend) / spend) * 100 : null;
     const leadToMeeting = leads > 0 && crm.meetings > 0 ? (crm.meetings / leads) * 100 : null;
     const cac = spend > 0 && crm.paid > 0 ? spend / crm.paid : null;
+    const avgDailySpend = spend / daysInRange;
     return {
       id: c.id,
       name: c.name,
       objective: c.objective,
       status: c.status,
       spend,
+      avgDailySpend,
       impressions,
       clicks,
       leads,
