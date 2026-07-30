@@ -148,10 +148,16 @@ export default async function OverviewPage({
       {
         $group: {
           _id: {
-            $dateToString: {
-              format: "%Y-%m-%d",
-              date: "$bookingCreatedAt",
-            },
+            $substr: [
+              {
+                $ifNull: [
+                  "$metaRawData.created_time",
+                  { $dateToString: { format: "%Y-%m-%d", date: "$bookingCreatedAt" } },
+                ],
+              },
+              0,
+              10,
+            ],
           },
           count: { $sum: 1 },
         },
