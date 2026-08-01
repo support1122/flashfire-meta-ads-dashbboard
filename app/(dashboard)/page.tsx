@@ -130,6 +130,7 @@ export default async function OverviewPage({
 
   // Meetings grouped by date from CRM
   const meetingsByDate = new Map<string, number>();
+  const revenueByDate = new Map<string, number>();
   try {
     const db = await getCrmDb();
     const coll = db.collection("campaignbookings");
@@ -164,6 +165,33 @@ export default async function OverviewPage({
       },
     ]).toArray();
     for (const r of meetingRows) meetingsByDate.set(String(r._id), r.count);
+
+    // Daily revenue from CRM (bucketed by statusChangedAt date)
+    const revenueRows = await coll.aggregate([
+      {
+        $match: {
+          bookingStatus: "paid",
+          statusChangedAt: { $gte: range.from, $lte: range.to },
+        },
+      },
+      {
+        $group: {
+          _id: { $dateToString: { format: "%Y-%m-%d", date: "$statusChangedAt" } },
+          revenueINR: {
+            $sum: {
+              $switch: {
+                branches: [
+                  { case: { $eq: [{ $toUpper: { $ifNull: ["$paymentPlan.currency", "usd"] } }, "CAD"] }, then: { $multiply: [{ $ifNull: ["$paymentPlan.price", 0] }, 60] } },
+                  { case: { $eq: [{ $toUpper: { $ifNull: ["$paymentPlan.currency", "usd"] } }, "INR"] }, then: { $ifNull: ["$paymentPlan.price", 0] } },
+                ],
+                default: { $multiply: [{ $ifNull: ["$paymentPlan.price", 0] }, 90] },
+              },
+            },
+          },
+        },
+      },
+    ]).toArray();
+    for (const r of revenueRows) revenueByDate.set(String(r._id), r.revenueINR);
   } catch (e) {
     console.error("CRM meetings trend fetch failed", e);
   }
@@ -174,6 +202,7 @@ export default async function OverviewPage({
     const c = r._sum.clicks ?? 0;
     const i = r._sum.impressions ?? 0;
     const dateStr = r.date.toISOString().slice(0, 10);
+    const rev = revenueByDate.get(dateStr) ?? 0;
     return {
       date: dateStr,
       spend: s,
@@ -181,6 +210,7 @@ export default async function OverviewPage({
       cpl: l > 0 ? s / l : null,
       ctr: i > 0 ? (c / i) * 100 : 0,
       meetings: meetingsByDate.get(dateStr) ?? 0,
+      roas: s > 0 && rev > 0 ? rev / s : null,
     };
   });
 
