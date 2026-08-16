@@ -66,7 +66,7 @@ export async function getStripeRevenueBycampaign(
   existingCrmMap: Map<string, CampaignRevenue>
 ): Promise<{ revenueMap: Map<string, CampaignRevenue>; revenueByDate: Map<string, number> }> {
 
-  const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, { apiVersion: "2023-10-16" });
+  const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, { apiVersion: "2026-06-24.dahlia" });
 
   // 1. Fetch all succeeded Stripe charges in date range
   const fromTs = Math.floor(from.getTime() / 1000);
