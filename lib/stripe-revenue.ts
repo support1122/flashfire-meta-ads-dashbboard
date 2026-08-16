@@ -109,31 +109,25 @@ export async function getStripeRevenueBycampaign(
     )
     .toArray();
 
-  // paymentEmail → best available CRM email
-  const emailMap = new Map<string, string>();
+  // paymentEmail → explicit crmEmail (only if crmEmail field is set — not dashboard login)
+  const crmEmailOverride = new Map<string, string>();
   for (const doc of trackingDocs) {
     const pe = (doc.paymentEmail || "").toLowerCase();
-    // prefer crmEmail field (newly saved), fall back to email field, then payment email itself
-    const crmEmail = (doc.crmEmail || doc.email || pe).toLowerCase();
-    if (pe) emailMap.set(pe, crmEmail);
-  }
-  // For any payment email not in Client Tracking, try it directly in CRM
-  for (const pe of paymentEmails) {
-    if (!emailMap.has(pe)) emailMap.set(pe, pe);
+    if (pe && doc.crmEmail) crmEmailOverride.set(pe, doc.crmEmail.toLowerCase());
   }
 
-  // 3. CRM DB — get campaign name by crmEmail
-  const allCrmEmails = [...new Set(emailMap.values())];
+  // 3. CRM DB — search by both payment emails and any crmEmail overrides
+  const allLookupEmails = [...new Set([...paymentEmails, ...crmEmailOverride.values()])];
   const crmDb = await getCrmDb();
   const crmBookings = await crmDb
     .collection("campaignbookings")
     .find(
-      { clientEmail: { $in: allCrmEmails } },
+      { clientEmail: { $in: allLookupEmails } },
       { projection: { clientEmail: 1, metaCampaignName: 1, utmSource: 1, bookingStatus: 1 } }
     )
     .toArray();
 
-  // crmEmail → metaCampaignName (prefer booking with campaign name)
+  // email → metaCampaignName (prefer booking with campaign name)
   const campaignByEmail = new Map<string, string>();
   for (const b of crmBookings) {
     const key = (b.clientEmail || "").toLowerCase();
@@ -150,7 +144,8 @@ export async function getStripeRevenueBycampaign(
     const paymentEmail = (charge.billing_details?.email || charge.receipt_email || "").toLowerCase().trim();
     if (!paymentEmail) continue;
 
-    const crmEmail = emailMap.get(paymentEmail) || paymentEmail;
+    // Try crmEmail override first, then fall back to payment email directly
+    const crmEmail = crmEmailOverride.get(paymentEmail) || paymentEmail;
     const campaignName = campaignByEmail.get(crmEmail) || campaignByEmail.get(paymentEmail) || "";
     if (!campaignName) continue; // skip charges with no campaign attribution
 
