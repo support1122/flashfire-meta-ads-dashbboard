@@ -4,6 +4,7 @@ import { calcCTR, calcCPL, calcCPC } from "@/lib/kpi-calc";
 import FilterBar from "@/components/FilterBar";
 import CampaignTable from "@/components/CampaignTable";
 import { getCrmDb } from "@/lib/mongo-crm";
+import { getStripeRevenueBycampaign } from "@/lib/stripe-revenue";
 
 export const dynamic = "force-dynamic";
 
@@ -29,79 +30,43 @@ export default async function CampaignsPage({
   ]);
   const campaignIds = campaigns.map((c) => c.id);
 
-  const USD_TO_INR = 90;
-  const CAD_TO_INR = 60;
-
-  function toINR(amount: number, currency: string): number {
-    const cur = (currency || "usd").toUpperCase();
-    if (cur === "CAD") return amount * CAD_TO_INR;
-    if (cur === "INR") return amount;
-    return amount * USD_TO_INR; // USD default
-  }
-
-  function fmtRevenue(amount: number, currency: string): string {
-    const cur = (currency || "usd").toUpperCase();
-    const n = amount.toLocaleString("en-US", { maximumFractionDigits: 0 });
-    if (cur === "USD") return `$${n}`;
-    if (cur === "CAD") return `CA$${n}`;
-    if (cur === "INR") return `₹${amount.toLocaleString("en-IN", { maximumFractionDigits: 0 })}`;
-    return `${cur} ${n}`;
-  }
-
   type CrmEntry = { meetings: number; paid: number; revenueDisplay: string; revenueINR: number };
   let crmMap: Map<string, CrmEntry> = new Map();
+
+  // Step 1 — meetings count from CRM (needed for L→M% column)
   try {
     const db = await getCrmDb();
     const coll = db.collection("campaignbookings");
-    const [meetingsAgg, paidAgg] = await Promise.all([
-      coll.aggregate([
-        {
-          $match: {
-            metaCampaignName: { $ne: null },
-            bookingStatus: { $nin: ["not-scheduled"] },
-            $or: [
-              { "metaRawData.created_time": { $gte: range.from.toISOString().slice(0, 10), $lte: range.to.toISOString().slice(0, 10) + "T23:59:59" } },
-              { $and: [{ "metaRawData.created_time": { $exists: false } }, { bookingCreatedAt: { $gte: range.from, $lte: range.to } }] },
-              { $and: [{ "metaRawData.created_time": null }, { bookingCreatedAt: { $gte: range.from, $lte: range.to } }] },
-            ],
-          },
+    const meetingsAgg = await coll.aggregate([
+      {
+        $match: {
+          metaCampaignName: { $ne: null },
+          bookingStatus: { $nin: ["not-scheduled"] },
+          $or: [
+            { "metaRawData.created_time": { $gte: range.from.toISOString().slice(0, 10), $lte: range.to.toISOString().slice(0, 10) + "T23:59:59" } },
+            { $and: [{ "metaRawData.created_time": { $exists: false } }, { bookingCreatedAt: { $gte: range.from, $lte: range.to } }] },
+            { $and: [{ "metaRawData.created_time": null }, { bookingCreatedAt: { $gte: range.from, $lte: range.to } }] },
+          ],
         },
-        { $group: { _id: "$metaCampaignName", meetings: { $sum: 1 } } },
-      ]).toArray(),
-      coll.aggregate([
-        {
-          $match: {
-            metaCampaignName: { $ne: null },
-            bookingStatus: "paid",
-            statusChangedAt: { $gte: range.from, $lte: range.to },
-          },
-        },
-        {
-          $group: {
-            _id: { campaign: "$metaCampaignName", currency: { $ifNull: ["$paymentPlan.currency", "usd"] } },
-            paid: { $sum: 1 },
-            total: { $sum: { $ifNull: ["$paymentPlan.price", 0] } },
-          },
-        },
-      ]).toArray(),
-    ]);
+      },
+      { $group: { _id: "$metaCampaignName", meetings: { $sum: 1 } } },
+    ]).toArray();
     for (const r of meetingsAgg) {
       const key = String(r._id).trim().toLowerCase();
       const cur = crmMap.get(key) ?? { meetings: 0, paid: 0, revenueDisplay: "", revenueINR: 0 };
       cur.meetings = r.meetings;
       crmMap.set(key, cur);
     }
-    for (const r of paidAgg) {
-      const key = String(r._id.campaign).trim().toLowerCase();
-      const cur = crmMap.get(key) ?? { meetings: 0, paid: 0, revenueDisplay: "", revenueINR: 0 };
-      cur.paid += r.paid;
-      cur.revenueINR += toINR(r.total, r._id.currency);
-      const part = fmtRevenue(r.total, r._id.currency);
-      cur.revenueDisplay = cur.revenueDisplay ? `${cur.revenueDisplay} + ${part}` : part;
-      crmMap.set(key, cur);
-    }
   } catch (e) {
-    console.error("CRM funnel fetch failed", e);
+    console.error("CRM meetings fetch failed", e);
+  }
+
+  // Step 2 — revenue + paid count from Stripe (real source of truth)
+  try {
+    const { revenueMap } = await getStripeRevenueBycampaign(range.from, range.to, crmMap);
+    crmMap = revenueMap;
+  } catch (e) {
+    console.error("Stripe revenue fetch failed (campaigns)", e);
   }
 
   const [perCampaignAgg, sparkRows, accountAgg] = await Promise.all([

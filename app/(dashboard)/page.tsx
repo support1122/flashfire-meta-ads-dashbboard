@@ -23,6 +23,7 @@ import AlertCard from "@/components/AlertCard";
 import FilterBar from "@/components/FilterBar";
 import CampaignTable from "@/components/CampaignTable";
 import { getCrmDb } from "@/lib/mongo-crm";
+import { getStripeRevenueBycampaign } from "@/lib/stripe-revenue";
 
 export const dynamic = "force-dynamic";
 
@@ -166,32 +167,7 @@ export default async function OverviewPage({
     ]).toArray();
     for (const r of meetingRows) meetingsByDate.set(String(r._id), r.count);
 
-    // Daily revenue from CRM (bucketed by statusChangedAt date)
-    const revenueRows = await coll.aggregate([
-      {
-        $match: {
-          bookingStatus: "paid",
-          statusChangedAt: { $gte: range.from, $lte: range.to },
-        },
-      },
-      {
-        $group: {
-          _id: { $dateToString: { format: "%Y-%m-%d", date: "$statusChangedAt" } },
-          revenueINR: {
-            $sum: {
-              $switch: {
-                branches: [
-                  { case: { $eq: [{ $toUpper: { $ifNull: ["$paymentPlan.currency", "usd"] } }, "CAD"] }, then: { $multiply: [{ $ifNull: ["$paymentPlan.price", 0] }, 60] } },
-                  { case: { $eq: [{ $toUpper: { $ifNull: ["$paymentPlan.currency", "usd"] } }, "INR"] }, then: { $ifNull: ["$paymentPlan.price", 0] } },
-                ],
-                default: { $multiply: [{ $ifNull: ["$paymentPlan.price", 0] }, 90] },
-              },
-            },
-          },
-        },
-      },
-    ]).toArray();
-    for (const r of revenueRows) revenueByDate.set(String(r._id), r.revenueINR);
+    // Daily revenue — populated later from Stripe (see getStripeRevenueBycampaign below)
   } catch (e) {
     console.error("CRM meetings trend fetch failed", e);
   }
@@ -276,58 +252,45 @@ export default async function OverviewPage({
 
   type CrmEntry = { meetings: number; paid: number; revenueDisplay: string; revenueINR: number };
   let crmMap: Map<string, CrmEntry> = new Map();
+
+  // Step 1 — fetch meetings count from CRM (for L→M% column, unchanged)
   try {
     const db = await getCrmDb();
     const coll = db.collection("campaignbookings");
-    const [meetingsAgg, paidAgg] = await Promise.all([
-      coll.aggregate([
-        {
-          $match: {
-            metaCampaignName: { $ne: null },
-            bookingStatus: { $nin: ["not-scheduled"] },
-            $or: [
-              { "metaRawData.created_time": { $gte: range.from.toISOString().slice(0, 10), $lte: range.to.toISOString().slice(0, 10) + "T23:59:59" } },
-              { $and: [{ "metaRawData.created_time": { $exists: false } }, { bookingCreatedAt: { $gte: range.from, $lte: range.to } }] },
-              { $and: [{ "metaRawData.created_time": null }, { bookingCreatedAt: { $gte: range.from, $lte: range.to } }] },
-            ],
-          },
+    const meetingsAgg = await coll.aggregate([
+      {
+        $match: {
+          metaCampaignName: { $ne: null },
+          bookingStatus: { $nin: ["not-scheduled"] },
+          $or: [
+            { "metaRawData.created_time": { $gte: range.from.toISOString().slice(0, 10), $lte: range.to.toISOString().slice(0, 10) + "T23:59:59" } },
+            { $and: [{ "metaRawData.created_time": { $exists: false } }, { bookingCreatedAt: { $gte: range.from, $lte: range.to } }] },
+            { $and: [{ "metaRawData.created_time": null }, { bookingCreatedAt: { $gte: range.from, $lte: range.to } }] },
+          ],
         },
-        { $group: { _id: "$metaCampaignName", meetings: { $sum: 1 } } },
-      ]).toArray(),
-      coll.aggregate([
-        {
-          $match: {
-            metaCampaignName: { $ne: null },
-            bookingStatus: "paid",
-            statusChangedAt: { $gte: range.from, $lte: range.to },
-          },
-        },
-        {
-          $group: {
-            _id: { campaign: "$metaCampaignName", currency: { $ifNull: ["$paymentPlan.currency", "usd"] } },
-            paid: { $sum: 1 },
-            total: { $sum: { $ifNull: ["$paymentPlan.price", 0] } },
-          },
-        },
-      ]).toArray(),
-    ]);
+      },
+      { $group: { _id: "$metaCampaignName", meetings: { $sum: 1 } } },
+    ]).toArray();
     for (const r of meetingsAgg) {
       const key = String(r._id).trim().toLowerCase();
       const cur = crmMap.get(key) ?? { meetings: 0, paid: 0, revenueDisplay: "", revenueINR: 0 };
       cur.meetings = r.meetings;
       crmMap.set(key, cur);
     }
-    for (const r of paidAgg) {
-      const key = String(r._id.campaign).trim().toLowerCase();
-      const cur = crmMap.get(key) ?? { meetings: 0, paid: 0, revenueDisplay: "", revenueINR: 0 };
-      cur.paid += r.paid;
-      cur.revenueINR += toINR(r.total, r._id.currency);
-      const part = fmtRevenue(r.total, r._id.currency);
-      cur.revenueDisplay = cur.revenueDisplay ? `${cur.revenueDisplay} + ${part}` : part;
-      crmMap.set(key, cur);
+  } catch (e) {
+    console.error("CRM meetings fetch failed (overview)", e);
+  }
+
+  // Step 2 — revenue + paid count from Stripe (real source of truth)
+  try {
+    const { revenueMap, revenueByDate: stripeByDate } = await getStripeRevenueBycampaign(range.from, range.to, crmMap);
+    crmMap = revenueMap;
+    // Merge Stripe daily revenue into revenueByDate
+    for (const [date, rev] of stripeByDate) {
+      revenueByDate.set(date, (revenueByDate.get(date) ?? 0) + rev);
     }
   } catch (e) {
-    console.error("CRM funnel fetch failed (overview)", e);
+    console.error("Stripe revenue fetch failed (overview)", e);
   }
 
   // Account-level ROAS, ROI, Lead→Meeting %
