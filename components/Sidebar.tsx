@@ -12,11 +12,13 @@ import {
   RefreshCw,
   Settings,
   LogOut,
+  GitBranch,
 } from "lucide-react";
 
 const NAV = [
   { href: "/", label: "Overview", icon: LayoutDashboard },
   { href: "/campaigns", label: "Campaigns", icon: Megaphone },
+  { href: "/pipeline", label: "Pipeline", icon: GitBranch },
   { href: "/creatives", label: "Creatives", icon: Image },
   { href: "/audience", label: "Audience", icon: Users },
   { href: "/budget", label: "Budget", icon: Wallet },
