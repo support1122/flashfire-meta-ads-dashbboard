@@ -1,15 +1,15 @@
 /**
- * CRM revenue attribution
+ * Revenue attribution — Stripe price + CRM lead date + CRM campaign
  *
  * Flow:
- *   1. Fetch all paid bookings in CRM where meta_created_time (or bookingCreatedAt) is within date range
- *   2. Group revenue by metaCampaignName
- *   3. Return revenueMap (by campaign) and revenueByDate (by lead date)
- *
- * This matches how the performance marketing team calculates revenue —
- * by when the Meta lead came in, not when the Stripe charge happened.
+ *   1. Fetch paid CRM bookings in date range (by Meta lead date)
+ *   2. Collect client emails
+ *   3. Look up Stripe charges by those emails → get actual charge amount/currency
+ *   4. If no Stripe charge found for a client, fall back to CRM paymentPlan price
+ *   5. Group revenue by metaCampaignName
  */
 
+import Stripe from "stripe";
 import { MongoClient } from "mongodb";
 
 const USD_TO_INR = 90;
@@ -61,25 +61,15 @@ export async function getStripeRevenueBycampaign(
   const fromStr = from.toISOString().slice(0, 10);
   const toStr = to.toISOString().slice(0, 10) + "T23:59:59";
 
-  // Fetch all paid bookings where the Meta lead date falls within the selected range
+  // Step 1 — fetch paid CRM bookings where Meta lead date is in range
   const paidBookings = await db.collection("campaignbookings").find(
     {
       bookingStatus: "paid",
       metaCampaignName: { $ne: null, $exists: true },
       $or: [
         { "metaRawData.created_time": { $gte: fromStr, $lte: toStr } },
-        {
-          $and: [
-            { "metaRawData.created_time": { $exists: false } },
-            { bookingCreatedAt: { $gte: from, $lte: to } },
-          ],
-        },
-        {
-          $and: [
-            { "metaRawData.created_time": null },
-            { bookingCreatedAt: { $gte: from, $lte: to } },
-          ],
-        },
+        { $and: [{ "metaRawData.created_time": { $exists: false } }, { bookingCreatedAt: { $gte: from, $lte: to } }] },
+        { $and: [{ "metaRawData.created_time": null }, { bookingCreatedAt: { $gte: from, $lte: to } }] },
       ],
     },
     {
@@ -93,7 +83,7 @@ export async function getStripeRevenueBycampaign(
     }
   ).toArray();
 
-  // Dedupe by clientEmail — one revenue entry per client, prefer booking with campaign name
+  // Dedupe by clientEmail
   const dedupedByEmail = new Map<string, typeof paidBookings[0]>();
   for (const b of paidBookings) {
     const key = (b.clientEmail || "").toLowerCase();
@@ -102,27 +92,75 @@ export async function getStripeRevenueBycampaign(
     if (b.metaCampaignName && !existing.metaCampaignName) dedupedByEmail.set(key, b);
   }
 
+  if (dedupedByEmail.size === 0) {
+    return { revenueMap: new Map(existingCrmMap), revenueByDate: new Map() };
+  }
+
+  // Step 2 — fetch Stripe charges for these emails to get real price/currency
+  // Search a wide window (from - 90 days to to + 30 days) to catch charges near the lead date
+  const stripeEmailToCharge = new Map<string, { amount: number; currency: string }>();
+  try {
+    const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, { apiVersion: "2026-06-24.dahlia" });
+    const clientEmails = [...dedupedByEmail.keys()]; // already lowercased
+
+    // Fetch charges in a wide window around the date range
+    const wideFrom = Math.floor(new Date(from.getTime() - 90 * 86400000).getTime() / 1000);
+    const wideTo = Math.floor(new Date(to.getTime() + 30 * 86400000).getTime() / 1000);
+
+    const charges: Stripe.Charge[] = [];
+    let startingAfter: string | undefined;
+    while (true) {
+      const params: Stripe.ChargeListParams = {
+        limit: 100,
+        created: { gte: wideFrom, lte: wideTo },
+      };
+      if (startingAfter) params.starting_after = startingAfter;
+      const page = await stripe.charges.list(params);
+      charges.push(...page.data.filter((c) => c.status === "succeeded" && c.amount > 0));
+      if (!page.has_more) break;
+      startingAfter = page.data[page.data.length - 1].id;
+    }
+
+    // Map email → most recent succeeded charge
+    for (const charge of charges) {
+      const email = (charge.billing_details?.email || charge.receipt_email || "").toLowerCase().trim();
+      if (!email || !clientEmails.includes(email)) continue;
+      // Keep the largest charge per email (most likely the actual plan payment)
+      const existing = stripeEmailToCharge.get(email);
+      if (!existing || charge.amount > existing.amount) {
+        stripeEmailToCharge.set(email, {
+          amount: charge.amount / 100, // Stripe stores in cents
+          currency: charge.currency.toUpperCase(),
+        });
+      }
+    }
+  } catch (e) {
+    console.error("Stripe lookup failed, falling back to CRM prices", e);
+  }
+
+  // Step 3 — build revenue maps using Stripe price if available, else CRM price
   const revenueMap = new Map<string, CampaignRevenue>(existingCrmMap);
   const revenueByDate = new Map<string, number>();
 
-  for (const booking of dedupedByEmail.values()) {
+  for (const [email, booking] of dedupedByEmail.entries()) {
     const campaignName = (booking.metaCampaignName || "").trim();
     if (!campaignName) continue;
 
-    const price = booking.paymentPlan?.price ?? 0;
-    const currency = booking.paymentPlan?.currency || "usd";
+    // Use Stripe amount if found, otherwise fall back to CRM paymentPlan
+    const stripeCharge = stripeEmailToCharge.get(email);
+    const price = stripeCharge?.amount ?? booking.paymentPlan?.price ?? 0;
+    const currency = stripeCharge?.currency ?? booking.paymentPlan?.currency ?? "usd";
     if (price <= 0) continue;
 
     const revenueINR = toINR(price, currency);
     const display = fmtRevenue(price, currency);
 
-    // Lead date — meta_created_time first, fallback to bookingCreatedAt
+    // Lead date from CRM (Meta lead date, not Stripe charge date)
     const leadDateRaw = booking.metaRawData?.created_time || booking.bookingCreatedAt;
     const dateStr = leadDateRaw
       ? new Date(leadDateRaw).toISOString().slice(0, 10)
       : from.toISOString().slice(0, 10);
 
-    // Campaign revenue map
     const campKey = campaignName.toLowerCase();
     const existing = revenueMap.get(campKey) ?? { meetings: 0, paid: 0, revenueDisplay: "", revenueINR: 0 };
     existing.paid += 1;
@@ -132,7 +170,6 @@ export async function getStripeRevenueBycampaign(
       : display;
     revenueMap.set(campKey, existing);
 
-    // Daily revenue map (for trend chart)
     revenueByDate.set(dateStr, (revenueByDate.get(dateStr) ?? 0) + revenueINR);
   }
 
