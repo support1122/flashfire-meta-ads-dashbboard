@@ -6,7 +6,7 @@ import { prisma } from "@/lib/db";
 export const dynamic = "force-dynamic";
 
 const STATUS_LABELS: Record<string, { label: string; color: string }> = {
-  completed:    { label: "Attended",    color: "var(--success, #22c55e)" },
+  attended:     { label: "Attended",    color: "var(--success, #22c55e)" },
   paid:         { label: "Paid",        color: "var(--accent, #6366f1)" },
   "no-show":    { label: "No Show",     color: "var(--danger, #ef4444)" },
   canceled:     { label: "Cancelled",   color: "var(--warning, #f59e0b)" },
@@ -14,7 +14,8 @@ const STATUS_LABELS: Record<string, { label: string; color: string }> = {
   scheduled:    { label: "Scheduled",   color: "var(--text-2, #94a3b8)" },
 };
 
-const STATUS_ORDER = ["completed", "paid", "no-show", "canceled", "rescheduled", "scheduled"];
+// Display order — "attended" is a computed key (completed + paid)
+const STATUS_ORDER = ["attended", "paid", "no-show", "canceled", "rescheduled", "scheduled"];
 
 export default async function PipelinePage({
   searchParams,
@@ -92,11 +93,17 @@ export default async function PipelinePage({
 
     for (const [campaign, statusMap] of bycamp.entries()) {
       const paid = statusMap["paid"] ?? 0;
+      // Merge completed + paid into "attended"
+      const attended = (statusMap["completed"] ?? 0) + paid;
+      const displayStatus: Record<string, number> = {
+        ...statusMap,
+        attended,
+      };
       const totalMeetings = Object.entries(statusMap)
         .filter(([s]) => !["not-scheduled", "ignored"].includes(s))
         .reduce((sum, [, c]) => sum + c, 0);
       const leads = campaignLeadsMap.get(campaign.toLowerCase()) ?? 0;
-      rows.push({ campaign, leads, byStatus: statusMap, totalMeetings, paid });
+      rows.push({ campaign, leads, byStatus: displayStatus, totalMeetings, paid });
     }
 
     rows.sort((a, b) => b.totalMeetings - a.totalMeetings);
@@ -178,7 +185,7 @@ export default async function PipelinePage({
             { label: "Leads", desc: "How many people filled the Meta ad form" },
             { label: "Meetings", desc: "How many of those leads actually booked a meeting" },
             { label: "L→M %", desc: "Lead to Meeting % = Meetings ÷ Leads. Shows how good the campaign converts leads to meetings" },
-            { label: "Attended", desc: "Meetings where the person showed up and the meeting was completed", color: "var(--success, #22c55e)" },
+            { label: "Attended", desc: "Meetings where the person showed up — includes completed + paid statuses", color: "var(--success, #22c55e)" },
             { label: "No Show", desc: "Booked a meeting but didn't show up", color: "var(--danger, #ef4444)" },
             { label: "Cancelled", desc: "They cancelled the meeting themselves", color: "var(--warning, #f59e0b)" },
             { label: "Rescheduled", desc: "They asked to reschedule (meeting moved to another time)", color: "#a78bfa" },
