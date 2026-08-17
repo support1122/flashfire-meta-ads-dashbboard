@@ -235,9 +235,11 @@ export default async function OverviewPage({
 
   const USD_TO_INR = 90;
   const CAD_TO_INR = 60;
+  const GBP_TO_INR = 120;
   function toINR(amount: number, currency: string): number {
     const cur = (currency || "usd").toUpperCase();
     if (cur === "CAD") return amount * CAD_TO_INR;
+    if (cur === "GBP") return amount * GBP_TO_INR;
     if (cur === "INR") return amount;
     return amount * USD_TO_INR;
   }
