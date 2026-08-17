@@ -141,22 +141,35 @@ export default async function PipelinePage({
           </thead>
           <tbody>
             {rows.map((row, i) => {
-              const lm = row.leads > 0 && row.totalMeetings > 0 ? ((row.totalMeetings / row.leads) * 100).toFixed(1) : "—";
-              const conv = row.totalMeetings > 0 && row.paid > 0 ? ((row.paid / row.totalMeetings) * 100).toFixed(1) : "—";
+              // Row total = sum of all status values for this campaign
+              const rowTotal = allStatuses.reduce((sum, s) => sum + (row.byStatus[s] ?? 0), 0) + row.paid;
+              const pct = (val: number) => rowTotal > 0 ? `${((val / rowTotal) * 100).toFixed(0)}%` : null;
               return (
                 <tr key={i} className="border-b border-[var(--border)] hover:bg-[var(--surface-2)]">
                   <td className="py-3 px-4 font-medium max-w-[220px] truncate">{row.campaign}</td>
-                  {allStatuses.map((s) => (
-                    <td key={s} className="py-3 px-3 text-right tabular-nums">
-                      {row.byStatus[s] ? (
-                        <span style={{ color: STATUS_LABELS[s]?.color }}>{row.byStatus[s]}</span>
-                      ) : (
-                        <span className="text-[var(--text-muted)]">—</span>
-                      )}
-                    </td>
-                  ))}
+                  {allStatuses.map((s) => {
+                    const val = row.byStatus[s];
+                    const p = val ? pct(val) : null;
+                    return (
+                      <td key={s} className="py-3 px-3 text-right tabular-nums">
+                        {val ? (
+                          <span>
+                            <span style={{ color: STATUS_LABELS[s]?.color }}>{val}</span>
+                            {p && <span className="ml-1 text-[11px]" style={{ color: "var(--text-muted)", opacity: 0.6 }}>{p}</span>}
+                          </span>
+                        ) : (
+                          <span className="text-[var(--text-muted)]">—</span>
+                        )}
+                      </td>
+                    );
+                  })}
                   <td className="py-3 px-4 text-right tabular-nums font-semibold" style={{ color: "var(--accent)" }}>
-                    {row.paid > 0 ? row.paid : "—"}
+                    {row.paid > 0 ? (
+                      <span>
+                        {row.paid}
+                        {pct(row.paid) && <span className="ml-1 text-[11px]" style={{ color: "var(--text-muted)", opacity: 0.6 }}>{pct(row.paid)}</span>}
+                      </span>
+                    ) : "—"}
                   </td>
                 </tr>
               );
