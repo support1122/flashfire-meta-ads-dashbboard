@@ -21,9 +21,19 @@ export default async function CampaignsPage({
   const daysInRange = Math.max(1, Math.round((range.to.getTime() - range.from.getTime()) / 86400000) + 1);
   const statusFilter = sp.status || undefined;
 
+  // Campaigns that have insight data in the selected date range
+  const insightCampaignIds = await prisma.insight.findMany({
+    where: { level: "campaign", date: { gte: range.from, lte: range.to } },
+    select: { campaignId: true },
+    distinct: ["campaignId"],
+  }).then((rows) => rows.map((r) => r.campaignId).filter(Boolean) as string[]);
+
   const [campaigns, allCampaignsForFilter] = await Promise.all([
     prisma.campaign.findMany({
-      where: statusFilter ? { status: statusFilter } : undefined,
+      where: {
+        id: { in: insightCampaignIds },
+        ...(statusFilter ? { status: statusFilter } : {}),
+      },
       orderBy: { name: "asc" },
     }),
     prisma.campaign.findMany({ select: { id: true, name: true }, orderBy: { name: "asc" } }),
