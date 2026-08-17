@@ -178,16 +178,12 @@ export default async function PipelinePage({
         <div className="grid gap-2" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))" }}>
           {[
             { label: "Campaign", desc: "Name of the Meta ad campaign" },
-            { label: "Leads", desc: "How many people filled the Meta ad form" },
-            { label: "Meetings", desc: "How many of those leads actually booked a meeting" },
-            { label: "L→M %", desc: "Lead to Meeting % = Meetings ÷ Leads. Shows how good the campaign converts leads to meetings" },
-            { label: "Attended", desc: "Meetings where the person showed up — includes completed + paid statuses", color: "var(--success, #22c55e)" },
+            { label: "Attended", desc: "Meetings where the person showed up — completed + paid statuses combined", color: "var(--success, #22c55e)" },
             { label: "No Show", desc: "Booked a meeting but didn't show up", color: "var(--danger, #ef4444)" },
             { label: "Cancelled", desc: "They cancelled the meeting themselves", color: "var(--warning, #f59e0b)" },
             { label: "Rescheduled", desc: "They asked to reschedule (meeting moved to another time)", color: "#a78bfa" },
             { label: "Scheduled", desc: "Meeting is booked but hasn't happened yet (upcoming)", color: "var(--text-2, #94a3b8)" },
             { label: "Paid", desc: "How many people actually paid and became a client", color: "var(--accent)" },
-            { label: "Conv %", desc: "Conversion % = Paid ÷ Meetings. Shows how many meetings turned into paying clients" },
           ].map(({ label, desc, color }) => (
             <div key={label} className="flex gap-2 text-[12px]">
               <span className="font-semibold shrink-0 w-[100px]" style={color ? { color } : { color: "var(--text)" }}>{label}</span>
