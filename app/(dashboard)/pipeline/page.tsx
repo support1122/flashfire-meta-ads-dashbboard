@@ -126,9 +126,6 @@ export default async function PipelinePage({
           <thead>
             <tr className="border-b border-[var(--border)]">
               <th className="text-left py-3 px-4 text-[var(--text-muted)] font-medium whitespace-nowrap">Campaign</th>
-              <th className="text-right py-3 px-3 text-[var(--text-muted)] font-medium whitespace-nowrap">Leads</th>
-              <th className="text-right py-3 px-3 text-[var(--text-muted)] font-medium whitespace-nowrap">Meetings</th>
-              <th className="text-right py-3 px-3 text-[var(--text-muted)] font-medium whitespace-nowrap">L→M %</th>
               {allStatuses.map((s) => (
                 <th key={s} className="text-right py-3 px-3 font-medium whitespace-nowrap" style={{ color: STATUS_LABELS[s]?.color }}>
                   {STATUS_LABELS[s]?.label ?? s}
@@ -137,7 +134,6 @@ export default async function PipelinePage({
               <th className="text-right py-3 px-4 font-medium whitespace-nowrap" style={{ color: "var(--accent)" }}>
                 Paid
               </th>
-              <th className="text-right py-3 px-4 text-[var(--text-muted)] font-medium whitespace-nowrap">Conv %</th>
             </tr>
           </thead>
           <tbody>
@@ -147,9 +143,6 @@ export default async function PipelinePage({
               return (
                 <tr key={i} className="border-b border-[var(--border)] hover:bg-[var(--surface-2)]">
                   <td className="py-3 px-4 font-medium max-w-[220px] truncate">{row.campaign}</td>
-                  <td className="py-3 px-3 text-right tabular-nums">{row.leads > 0 ? row.leads.toLocaleString() : "—"}</td>
-                  <td className="py-3 px-3 text-right tabular-nums font-medium">{row.totalMeetings}</td>
-                  <td className="py-3 px-3 text-right tabular-nums text-[var(--text-2)]">{lm}{lm !== "—" ? "%" : ""}</td>
                   {allStatuses.map((s) => (
                     <td key={s} className="py-3 px-3 text-right tabular-nums">
                       {row.byStatus[s] ? (
@@ -162,13 +155,12 @@ export default async function PipelinePage({
                   <td className="py-3 px-4 text-right tabular-nums font-semibold" style={{ color: "var(--accent)" }}>
                     {row.paid > 0 ? row.paid : "—"}
                   </td>
-                  <td className="py-3 px-4 text-right tabular-nums text-[var(--text-2)]">{conv}{conv !== "—" ? "%" : ""}</td>
                 </tr>
               );
             })}
             {rows.length === 0 && (
               <tr>
-                <td colSpan={4 + allStatuses.length + 2} className="py-8 text-center text-[var(--text-muted)]">
+                <td colSpan={1 + allStatuses.length + 1} className="py-8 text-center text-[var(--text-muted)]">
                   No data for selected date range
                 </td>
               </tr>
