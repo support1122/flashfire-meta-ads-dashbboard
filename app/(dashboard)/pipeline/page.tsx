@@ -1,6 +1,7 @@
 import { getCrmDb } from "@/lib/mongo-crm";
 import { parseDateRange } from "@/lib/query-helpers";
 import FilterBar from "@/components/FilterBar";
+import PipelineTable from "@/components/PipelineTable";
 import { prisma } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
@@ -124,66 +125,7 @@ export default async function PipelinePage({
         <FilterBar campaigns={allCampaigns} />
       </div>
 
-      <div className="bg-[var(--surface)] border border-[var(--border)] rounded-[10px] overflow-x-auto">
-        <table className="w-full text-[12.5px] border-collapse">
-          <thead>
-            <tr className="border-b border-[var(--border)]">
-              <th className="text-left py-3 px-4 text-[var(--text-muted)] font-medium whitespace-nowrap">Campaign</th>
-              {allStatuses.map((s) => (
-                <th key={s} className="text-right py-3 px-3 font-medium whitespace-nowrap" style={{ color: STATUS_LABELS[s]?.color }}>
-                  {STATUS_LABELS[s]?.label ?? s}
-                </th>
-              ))}
-              <th className="text-right py-3 px-4 font-medium whitespace-nowrap" style={{ color: "var(--accent)" }}>
-                Paid
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((row, i) => {
-              // Row total = sum of all status values for this campaign
-              const rowTotal = allStatuses.reduce((sum, s) => sum + (row.byStatus[s] ?? 0), 0) + row.paid;
-              const pct = (val: number) => rowTotal > 0 ? `${((val / rowTotal) * 100).toFixed(0)}%` : null;
-              return (
-                <tr key={i} className="border-b border-[var(--border)] hover:bg-[var(--surface-2)]">
-                  <td className="py-3 px-4 font-medium max-w-[220px] truncate">{row.campaign}</td>
-                  {allStatuses.map((s) => {
-                    const val = row.byStatus[s];
-                    const p = val ? pct(val) : null;
-                    return (
-                      <td key={s} className="py-3 px-3 text-right tabular-nums">
-                        {val ? (
-                          <span>
-                            <span style={{ color: STATUS_LABELS[s]?.color }}>{val}</span>
-                            {p && <span className="ml-1 text-[11px]" style={{ color: "var(--text-muted)", opacity: 0.6 }}>{p}</span>}
-                          </span>
-                        ) : (
-                          <span className="text-[var(--text-muted)]">—</span>
-                        )}
-                      </td>
-                    );
-                  })}
-                  <td className="py-3 px-4 text-right tabular-nums font-semibold" style={{ color: "var(--accent)" }}>
-                    {row.paid > 0 ? (
-                      <span>
-                        {row.paid}
-                        {pct(row.paid) && <span className="ml-1 text-[11px]" style={{ color: "var(--text-muted)", opacity: 0.6 }}>{pct(row.paid)}</span>}
-                      </span>
-                    ) : "—"}
-                  </td>
-                </tr>
-              );
-            })}
-            {rows.length === 0 && (
-              <tr>
-                <td colSpan={1 + allStatuses.length + 1} className="py-8 text-center text-[var(--text-muted)]">
-                  No data for selected date range
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
+      <PipelineTable rows={rows} allStatuses={allStatuses} />
 
       {/* Column legend */}
       <div className="mt-5 bg-[var(--surface)] border border-[var(--border)] rounded-[10px] px-5 py-4">
