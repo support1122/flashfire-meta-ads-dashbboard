@@ -103,9 +103,9 @@ export default async function PipelinePage({
     console.error("Pipeline fetch failed", e);
   }
 
-  // Collect all statuses seen
+  // Collect all statuses seen — exclude "paid" since it has its own dedicated column
   const allStatuses = STATUS_ORDER.filter((s) =>
-    rows.some((r) => r.byStatus[s])
+    s !== "paid" && rows.some((r) => r.byStatus[s])
   );
 
   return (
