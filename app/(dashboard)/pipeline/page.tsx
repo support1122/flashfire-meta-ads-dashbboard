@@ -52,6 +52,7 @@ export default async function PipelinePage({
       {
         $match: {
           metaCampaignName: { $ne: null, $exists: true },
+          bookingStatus: { $nin: ["not-scheduled", "ignored"] },
           $or: [
             { "metaRawData.created_time": { $gte: fromStr, $lte: toStr } },
             { $and: [{ "metaRawData.created_time": { $exists: false } }, { bookingCreatedAt: { $gte: range.from, $lte: range.to } }] },
@@ -92,7 +93,7 @@ export default async function PipelinePage({
     for (const [campaign, statusMap] of bycamp.entries()) {
       const paid = statusMap["paid"] ?? 0;
       const totalMeetings = Object.entries(statusMap)
-        .filter(([s]) => s !== "not-scheduled")
+        .filter(([s]) => !["not-scheduled", "ignored"].includes(s))
         .reduce((sum, [, c]) => sum + c, 0);
       const leads = campaignLeadsMap.get(campaign.toLowerCase()) ?? 0;
       rows.push({ campaign, leads, byStatus: statusMap, totalMeetings, paid });
