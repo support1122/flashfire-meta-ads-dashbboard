@@ -93,10 +93,19 @@ export async function getStripeRevenueBycampaign(
     }
   ).toArray();
 
+  // Dedupe by clientEmail — one revenue entry per client, prefer booking with campaign name
+  const dedupedByEmail = new Map<string, typeof paidBookings[0]>();
+  for (const b of paidBookings) {
+    const key = (b.clientEmail || "").toLowerCase();
+    const existing = dedupedByEmail.get(key);
+    if (!existing) { dedupedByEmail.set(key, b); continue; }
+    if (b.metaCampaignName && !existing.metaCampaignName) dedupedByEmail.set(key, b);
+  }
+
   const revenueMap = new Map<string, CampaignRevenue>(existingCrmMap);
   const revenueByDate = new Map<string, number>();
 
-  for (const booking of paidBookings) {
+  for (const booking of dedupedByEmail.values()) {
     const campaignName = (booking.metaCampaignName || "").trim();
     if (!campaignName) continue;
 
