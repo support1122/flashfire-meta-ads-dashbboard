@@ -54,11 +54,7 @@ export default async function PipelinePage({
         $match: {
           metaCampaignName: { $ne: null, $exists: true },
           bookingStatus: { $nin: ["not-scheduled", "ignored"] },
-          $or: [
-            { "metaRawData.created_time": { $gte: fromStr, $lte: toStr } },
-            { $and: [{ "metaRawData.created_time": { $exists: false } }, { bookingCreatedAt: { $gte: range.from, $lte: range.to } }] },
-            { $and: [{ "metaRawData.created_time": null }, { bookingCreatedAt: { $gte: range.from, $lte: range.to } }] },
-          ],
+          bookingCreatedAt: { $gte: range.from, $lte: range.to },
         },
       },
       {
