@@ -1,9 +1,9 @@
 import { getCrmDb } from "@/lib/mongo-crm";
 export const dynamic = "force-dynamic";
 
-const USD_TO_INR = 95.6;
-const CAD_TO_INR = 69.02;
-const GBP_TO_INR = 105;
+const USD_TO_INR = 90;
+const CAD_TO_INR = 60;
+const GBP_TO_INR = 120;
 
 function toINR(amount: number, currency: string): number {
   const cur = (currency || "usd").toUpperCase();
