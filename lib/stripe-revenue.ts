@@ -61,12 +61,16 @@ export async function getStripeRevenueBycampaign(
   const fromStr = from.toISOString().slice(0, 10);
   const toStr = to.toISOString().slice(0, 10) + "T23:59:59";
 
-  // Step 1 — fetch paid CRM bookings where payment date (bookingCreatedAt) is in range
+  // Step 1 — fetch paid CRM bookings where Meta lead date is in range
   const paidBookings = await db.collection("campaignbookings").find(
     {
       bookingStatus: "paid",
       metaCampaignName: { $ne: null, $exists: true },
-      bookingCreatedAt: { $gte: from, $lte: to },
+      $or: [
+        { "metaRawData.created_time": { $gte: fromStr, $lte: toStr } },
+        { $and: [{ "metaRawData.created_time": { $exists: false } }, { bookingCreatedAt: { $gte: from, $lte: to } }] },
+        { $and: [{ "metaRawData.created_time": null }, { bookingCreatedAt: { $gte: from, $lte: to } }] },
+      ],
     },
     {
       projection: {
