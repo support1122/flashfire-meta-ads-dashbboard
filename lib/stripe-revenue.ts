@@ -16,6 +16,31 @@ const USD_TO_INR = 90;
 const CAD_TO_INR = 60;
 const GBP_TO_INR = 120;
 
+/**
+ * Campaign-name aliases — CRM freezes `metaCampaignName` at the value that was
+ * live when the lead came in, so a Meta campaign that gets renamed ends up split
+ * across two names in `campaignbookings` even though it's the same campaign id.
+ * The dashboard joins CRM revenue to Meta campaigns BY NAME, so without this map
+ * the old-name bucket finds no campaign row and its revenue/paid count vanish.
+ *
+ * Key = stale name (lowercased), value = current Meta campaign name (lowercased).
+ *
+ * 120247766497660177 — renamed "USA Job - Arun – United Kingdom" -> "UK Job - Arun
+ * – United Kingdom" on 24 Aug 2026. The bare id also appears as a name on some
+ * leads that never got name-mapped.
+ */
+const CAMPAIGN_NAME_ALIASES: Record<string, string> = {
+  "usa job - arun – united kingdom": "uk job - arun – united kingdom",
+  "120247766497660177": "uk job - arun – united kingdom",
+  "c:120247766497660177": "uk job - arun – united kingdom",
+};
+
+/** Collapse a raw CRM metaCampaignName to the current Meta campaign name (lowercased). */
+export function canonicalCampaignKey(name: string): string {
+  const key = (name || "").trim().toLowerCase();
+  return CAMPAIGN_NAME_ALIASES[key] ?? key;
+}
+
 function toINR(amount: number, currency: string): number {
   const cur = (currency || "usd").toUpperCase();
   if (cur === "CAD") return amount * CAD_TO_INR;
@@ -162,7 +187,7 @@ export async function getStripeRevenueBycampaign(
       ? new Date(leadDateRaw).toISOString().slice(0, 10)
       : from.toISOString().slice(0, 10);
 
-    const campKey = campaignName.toLowerCase();
+    const campKey = canonicalCampaignKey(campaignName);
     const existing = revenueMap.get(campKey) ?? { meetings: 0, paid: 0, revenueDisplay: "", revenueINR: 0 };
     existing.paid += 1;
     existing.revenueINR += revenueINR;
