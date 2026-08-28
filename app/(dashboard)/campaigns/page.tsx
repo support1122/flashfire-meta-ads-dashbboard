@@ -4,7 +4,7 @@ import { calcCTR, calcCPL, calcCPC } from "@/lib/kpi-calc";
 import FilterBar from "@/components/FilterBar";
 import CampaignTable from "@/components/CampaignTable";
 import { getCrmDb } from "@/lib/mongo-crm";
-import { getStripeRevenueBycampaign } from "@/lib/stripe-revenue";
+import { getStripeRevenueBycampaign, canonicalCampaignKey } from "@/lib/stripe-revenue";
 
 export const dynamic = "force-dynamic";
 
@@ -62,9 +62,11 @@ export default async function CampaignsPage({
       { $group: { _id: "$metaCampaignName", meetings: { $sum: 1 } } },
     ]).toArray();
     for (const r of meetingsAgg) {
-      const key = String(r._id).trim().toLowerCase();
+      // Collapse renamed campaigns (stale CRM name -> current Meta name) so the
+      // meetings count lands on the same row the revenue does.
+      const key = canonicalCampaignKey(String(r._id));
       const cur = crmMap.get(key) ?? { meetings: 0, paid: 0, revenueDisplay: "", revenueINR: 0 };
-      cur.meetings = r.meetings;
+      cur.meetings += r.meetings;
       crmMap.set(key, cur);
     }
   } catch (e) {
