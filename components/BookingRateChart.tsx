@@ -110,12 +110,23 @@ export default function BookingRateChart({ data }: { data: TrendRow[] }) {
 
   // Filter data to internal date range
   const filtered = useMemo(() => {
+    // Monthly: always show full history from Jan 2026 (when Meta ads started)
+    if (granularity === "monthly") {
+      return data.filter((r) => r.date >= "2026-01-01");
+    }
+    // Weekly: always show last 8 weeks regardless of date picker
+    if (granularity === "weekly") {
+      const cutoff = new Date();
+      cutoff.setDate(cutoff.getDate() - 7 * 8);
+      const cutoffStr = fmt(cutoff);
+      return data.filter((r) => r.date >= cutoffStr);
+    }
     return data.filter((r) => {
       if (from && r.date < from) return false;
       if (to && r.date > to) return false;
       return true;
     });
-  }, [data, from, to]);
+  }, [data, from, to, granularity]);
 
   const grouped = useMemo(() => groupData(filtered, granularity), [filtered, granularity]);
 
