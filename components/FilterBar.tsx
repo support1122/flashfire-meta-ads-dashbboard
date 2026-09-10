@@ -45,6 +45,16 @@ export default function FilterBar({ campaigns }: FilterBarProps) {
     router.push(`${pathname}?${params.toString()}`);
   }
 
+  function applyMTD() {
+    const now = new Date();
+    const from = new Date(now.getFullYear(), now.getMonth(), 1);
+    const fmt = (d: Date) => d.toISOString().slice(0, 10);
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("from", fmt(from));
+    params.set("to", fmt(now));
+    router.push(`${pathname}?${params.toString()}`);
+  }
+
   return (
     <div className="flex items-center gap-2 flex-wrap">
       <div className="flex items-center gap-1">
@@ -57,6 +67,12 @@ export default function FilterBar({ campaigns }: FilterBarProps) {
             {p.label}
           </button>
         ))}
+        <button
+          onClick={applyMTD}
+          className="px-2.5 py-1 text-[11.5px] rounded-md border border-[var(--border)] bg-[var(--surface)] hover:bg-[var(--accent-bg)] hover:border-[var(--accent)] hover:text-[var(--accent)] transition-colors"
+        >
+          MTD
+        </button>
       </div>
 
       <input

@@ -19,6 +19,7 @@ import { parseDateRange } from "@/lib/query-helpers";
 import { calcCTR, calcCPC, calcCPM, calcCPL, calcPercentChange } from "@/lib/kpi-calc";
 import KpiCard from "@/components/KpiCard";
 import TrendChart from "@/components/TrendChart";
+import BookingRateChart from "@/components/BookingRateChart";
 import AlertCard from "@/components/AlertCard";
 import FilterBar from "@/components/FilterBar";
 import CampaignTable from "@/components/CampaignTable";
@@ -431,6 +432,14 @@ export default async function OverviewPage({
             </tbody>
           </table>
         </div>
+      </div>
+
+      <div className="bg-[var(--surface)] border border-[var(--border)] rounded-[10px] px-4.5 py-4 mb-5">
+        <div className="mb-3.5">
+          <div className="text-sm font-semibold">Booking Rate %</div>
+          <div className="text-xs text-[var(--text-muted)] mt-0.5">Meetings booked ÷ Leads · selected period</div>
+        </div>
+        <BookingRateChart data={trendData} />
       </div>
 
       <div className="bg-[var(--surface)] border border-[var(--border)] rounded-[10px] px-4.5 py-4">
