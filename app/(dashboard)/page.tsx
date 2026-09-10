@@ -192,6 +192,49 @@ export default async function OverviewPage({
     };
   });
 
+  // --- Booking Rate chart: always fetch full MTD data independent of global date range ---
+  const mtdFrom = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+  mtdFrom.setHours(0, 0, 0, 0);
+  const mtdTo = new Date();
+  mtdTo.setHours(23, 59, 59, 999);
+
+  let bookingRateData: { date: string; leads: number; meetings: number; bookingRate: number | null }[] = [];
+  try {
+    const mtdTrendRows = await prisma.insight.groupBy({
+      by: ["date"],
+      where: { level: "campaign", date: { gte: mtdFrom, lte: mtdTo } },
+      _sum: { leads: true },
+      orderBy: { date: "asc" },
+    });
+
+    const mtdMeetingsByDate = new Map<string, number>();
+    const db2 = await getCrmDb();
+    const mtdMeetingRows = await db2.collection("campaignbookings").aggregate([
+      {
+        $match: {
+          metaCampaignName: { $ne: null },
+          bookingStatus: { $ne: "not-scheduled" },
+          $or: [
+            { "metaRawData.created_time": { $gte: mtdFrom.toISOString().slice(0, 10), $lte: mtdTo.toISOString().slice(0, 10) + "T23:59:59" } },
+            { $and: [{ "metaRawData.created_time": { $exists: false } }, { bookingCreatedAt: { $gte: mtdFrom, $lte: mtdTo } }] },
+            { $and: [{ "metaRawData.created_time": null }, { bookingCreatedAt: { $gte: mtdFrom, $lte: mtdTo } }] },
+          ],
+        },
+      },
+      { $group: { _id: { $substr: [{ $ifNull: ["$metaRawData.created_time", { $dateToString: { format: "%Y-%m-%d", date: "$bookingCreatedAt" } }] }, 0, 10] }, count: { $sum: 1 } } },
+    ]).toArray();
+    for (const r of mtdMeetingRows) mtdMeetingsByDate.set(String(r._id), r.count);
+
+    bookingRateData = mtdTrendRows.map((r) => {
+      const l = r._sum.leads ?? 0;
+      const dateStr = r.date.toISOString().slice(0, 10);
+      const m = mtdMeetingsByDate.get(dateStr) ?? 0;
+      return { date: dateStr, leads: l, meetings: m, bookingRate: l > 0 ? (m / l) * 100 : null };
+    });
+  } catch (e) {
+    console.error("Booking rate MTD fetch failed", e);
+  }
+
   // Campaign table rows for the top 8 campaigns (by name), with health flags computed against
   // the account average for the selected period.
   const campaignIds = campaignsForTable.map((c) => c.id);
@@ -439,7 +482,7 @@ export default async function OverviewPage({
           <div className="text-sm font-semibold">Booking Rate %</div>
           <div className="text-xs text-[var(--text-muted)] mt-0.5">Meetings booked ÷ Leads · selected period</div>
         </div>
-        <BookingRateChart data={trendData} />
+        <BookingRateChart data={bookingRateData} />
       </div>
 
       <div className="bg-[var(--surface)] border border-[var(--border)] rounded-[10px] px-4.5 py-4">
