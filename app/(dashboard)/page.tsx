@@ -91,19 +91,19 @@ export default async function OverviewPage({
       _sum: { spend: true, leads: true, clicks: true, impressions: true },
       orderBy: { date: "asc" },
     }),
-    // fetched separately so BookingRateChart monthly/weekly views always show full history
-    prisma.insight.groupBy({
-      by: ["date"],
-      where: { level: "campaign", date: { gte: new Date("2026-01-01") } },
-      _sum: { leads: true },
-      orderBy: { date: "asc" },
-    }),
     prisma.alert.findMany({ where: { resolved: false }, orderBy: { createdAt: "desc" }, take: 5 }),
     prisma.campaign.findMany({ select: { id: true, name: true }, orderBy: { name: "asc" } }),
     prisma.campaign.findMany({
       where: { status: "ACTIVE", ...(statusFilter ? { status: statusFilter } : {}) },
       select: { id: true, name: true, status: true, dailyBudget: true },
       orderBy: { name: "asc" },
+    }),
+    // fetched separately so BookingRateChart monthly/weekly views always show full history
+    prisma.insight.groupBy({
+      by: ["date"],
+      where: { level: "campaign", date: { gte: new Date("2026-01-01") } },
+      _sum: { leads: true },
+      orderBy: { date: "asc" },
     }),
   ]);
 
