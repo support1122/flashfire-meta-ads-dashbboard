@@ -75,7 +75,7 @@ const BTN_PILL = "px-3 py-1 text-[11.5px] rounded-full border transition-colors"
 const BTN_PILL_ACTIVE = `${BTN_PILL} bg-[var(--accent)] border-[var(--accent)] text-white font-medium`;
 const BTN_PILL_DEFAULT = `${BTN_PILL} border-[var(--border)] bg-[var(--surface)] text-[var(--text-2)] hover:border-[var(--accent)] hover:text-[var(--accent)]`;
 
-export default function BookingRateChart({ data }: { data: TrendRow[] }) {
+export default function BookingRateChart({ data, allTimeData }: { data: TrendRow[]; allTimeData?: TrendRow[] }) {
   const [granularity, setGranularity] = useState<Granularity>("daily");
 
   // Internal date range — defaults to MTD
@@ -110,12 +110,25 @@ export default function BookingRateChart({ data }: { data: TrendRow[] }) {
 
   // Filter data to internal date range
   const filtered = useMemo(() => {
+    const full = allTimeData ?? data;
+    // Monthly: always show full history from Jan 2026 (when Meta ads started)
+    if (granularity === "monthly") {
+      return full.filter((r) => r.date >= "2026-01-01");
+    }
+    // Weekly: always show last 8 weeks regardless of date picker
+    if (granularity === "weekly") {
+      const cutoff = new Date();
+      cutoff.setDate(cutoff.getDate() - 7 * 8);
+      const cutoffStr = fmt(cutoff);
+      return full.filter((r) => r.date >= cutoffStr);
+    }
+    // Daily: respect the date picker
     return data.filter((r) => {
       if (from && r.date < from) return false;
       if (to && r.date > to) return false;
       return true;
     });
-  }, [data, from, to]);
+  }, [data, allTimeData, from, to, granularity]);
 
   const grouped = useMemo(() => groupData(filtered, granularity), [filtered, granularity]);
 
