@@ -72,6 +72,7 @@ export default async function OverviewPage({
     alerts,
     allCampaigns,
     campaignsForTable,
+    allTimeRows,
   ] = await Promise.all([
     prisma.insight.aggregate({
       where: whereFor(range.from, range.to),
@@ -88,6 +89,13 @@ export default async function OverviewPage({
       by: ["date"],
       where: whereFor(range.from, range.to),
       _sum: { spend: true, leads: true, clicks: true, impressions: true },
+      orderBy: { date: "asc" },
+    }),
+    // fetched separately so BookingRateChart monthly/weekly views always show full history
+    prisma.insight.groupBy({
+      by: ["date"],
+      where: { level: "campaign", date: { gte: new Date("2026-01-01") } },
+      _sum: { leads: true },
       orderBy: { date: "asc" },
     }),
     prisma.alert.findMany({ where: { resolved: false }, orderBy: { createdAt: "desc" }, take: 5 }),
@@ -132,46 +140,73 @@ export default async function OverviewPage({
 
   // Meetings grouped by date from CRM
   const meetingsByDate = new Map<string, number>();
+  const allTimeMeetingsByDate = new Map<string, number>();
   const revenueByDate = new Map<string, number>();
   try {
     const db = await getCrmDb();
     const coll = db.collection("campaignbookings");
-    const meetingRows = await coll.aggregate([
-      {
-        $match: {
-          metaCampaignName: { $ne: null },
-          bookingStatus: { $ne: "not-scheduled" },
-          $or: [
-            { "metaRawData.created_time": { $gte: range.from.toISOString().slice(0, 10), $lte: range.to.toISOString().slice(0, 10) + "T23:59:59" } },
-            { $and: [{ "metaRawData.created_time": { $exists: false } }, { bookingCreatedAt: { $gte: range.from, $lte: range.to } }] },
-            { $and: [{ "metaRawData.created_time": null }, { bookingCreatedAt: { $gte: range.from, $lte: range.to } }] },
-          ],
-        },
-      },
-      {
-        $group: {
-          _id: {
-            $substr: [
-              {
-                $ifNull: [
-                  "$metaRawData.created_time",
-                  { $dateToString: { format: "%Y-%m-%d", date: "$bookingCreatedAt" } },
-                ],
-              },
-              0,
-              10,
+    const [meetingRows, allTimeMeetingRows] = await Promise.all([
+      coll.aggregate([
+        {
+          $match: {
+            metaCampaignName: { $ne: null },
+            bookingStatus: { $ne: "not-scheduled" },
+            $or: [
+              { "metaRawData.created_time": { $gte: range.from.toISOString().slice(0, 10), $lte: range.to.toISOString().slice(0, 10) + "T23:59:59" } },
+              { $and: [{ "metaRawData.created_time": { $exists: false } }, { bookingCreatedAt: { $gte: range.from, $lte: range.to } }] },
+              { $and: [{ "metaRawData.created_time": null }, { bookingCreatedAt: { $gte: range.from, $lte: range.to } }] },
             ],
           },
-          count: { $sum: 1 },
         },
-      },
-    ]).toArray();
+        {
+          $group: {
+            _id: {
+              $substr: [{ $ifNull: ["$metaRawData.created_time", { $dateToString: { format: "%Y-%m-%d", date: "$bookingCreatedAt" } }] }, 0, 10],
+            },
+            count: { $sum: 1 },
+          },
+        },
+      ]).toArray(),
+      coll.aggregate([
+        {
+          $match: {
+            metaCampaignName: { $ne: null },
+            bookingStatus: { $ne: "not-scheduled" },
+            $or: [
+              { "metaRawData.created_time": { $gte: "2026-01-01" } },
+              { $and: [{ "metaRawData.created_time": { $exists: false } }, { bookingCreatedAt: { $gte: new Date("2026-01-01") } }] },
+              { $and: [{ "metaRawData.created_time": null }, { bookingCreatedAt: { $gte: new Date("2026-01-01") } }] },
+            ],
+          },
+        },
+        {
+          $group: {
+            _id: {
+              $substr: [{ $ifNull: ["$metaRawData.created_time", { $dateToString: { format: "%Y-%m-%d", date: "$bookingCreatedAt" } }] }, 0, 10],
+            },
+            count: { $sum: 1 },
+          },
+        },
+      ]).toArray(),
+    ]);
     for (const r of meetingRows) meetingsByDate.set(String(r._id), r.count);
+    for (const r of allTimeMeetingRows) allTimeMeetingsByDate.set(String(r._id), r.count);
 
     // Daily revenue — populated later from Stripe (see getStripeRevenueBycampaign below)
   } catch (e) {
     console.error("CRM meetings trend fetch failed", e);
   }
+
+  const allTimeData = allTimeRows.map((r) => {
+    const l = r._sum.leads ?? 0;
+    const dateStr = r.date.toISOString().slice(0, 10);
+    return {
+      date: dateStr,
+      leads: l,
+      meetings: allTimeMeetingsByDate.get(dateStr) ?? 0,
+      bookingRate: l > 0 ? ((allTimeMeetingsByDate.get(dateStr) ?? 0) / l) * 100 : null,
+    };
+  });
 
   const trendData = trendRows.map((r) => {
     const s = r._sum.spend ?? 0;
@@ -439,7 +474,7 @@ export default async function OverviewPage({
           <div className="text-sm font-semibold">Booking Rate %</div>
           <div className="text-xs text-[var(--text-muted)] mt-0.5">Meetings booked ÷ Leads · selected period</div>
         </div>
-        <BookingRateChart data={trendData} />
+        <BookingRateChart data={trendData} allTimeData={allTimeData} />
       </div>
 
       <div className="bg-[var(--surface)] border border-[var(--border)] rounded-[10px] px-4.5 py-4">
