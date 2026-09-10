@@ -186,6 +186,7 @@ export default async function OverviewPage({
       cpl: l > 0 ? s / l : null,
       ctr: i > 0 ? (c / i) * 100 : 0,
       meetings: meetingsByDate.get(dateStr) ?? 0,
+      bookingRate: l > 0 ? ((meetingsByDate.get(dateStr) ?? 0) / l) * 100 : null,
       roas: s > 0 && rev > 0 ? rev / s : null,
     };
   });
