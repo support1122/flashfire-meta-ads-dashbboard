@@ -19,6 +19,7 @@ interface TrendRow {
   cpl: number | null;
   ctr: number;
   meetings?: number;
+  bookingRate?: number | null;
   roas?: number | null;
 }
 
@@ -61,6 +62,7 @@ function groupData(data: TrendRow[], granularity: Granularity): TrendRow[] {
       meetings: v.meetings,
       cpl: v.leads > 0 ? v.spend / v.leads : null,
       ctr: 0,
+      bookingRate: v.leads > 0 ? (v.meetings / v.leads) * 100 : null,
       roas: v.spend > 0 && v.revenueINR > 0 ? v.revenueINR / v.spend : null,
     }));
 }
@@ -137,6 +139,7 @@ export default function TrendChart({ data }: { data: TrendRow[] }) {
             <YAxis yAxisId="leads" orientation="right" hide />
             <YAxis yAxisId="meetings" orientation="right" hide />
             <YAxis yAxisId="roas" orientation="right" hide />
+            <YAxis yAxisId="bookingRate" orientation="right" hide />
             <Tooltip
               contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid var(--border)" }}
               labelFormatter={(v) => formatLabel(String(v), granularity)}
@@ -147,6 +150,7 @@ export default function TrendChart({ data }: { data: TrendRow[] }) {
                 if (name === "leads") return [String(v), "Leads"];
                 if (name === "meetings") return [String(v), "Meetings"];
                 if (name === "roas") return [v != null ? `${v.toFixed(2)}x` : "—", "ROAS"];
+                if (name === "bookingRate") return [v != null ? `${v.toFixed(1)}%` : "—", "Booking Rate"];
                 return [String(v), String(name)];
               }}
             />
@@ -189,6 +193,15 @@ export default function TrendChart({ data }: { data: TrendRow[] }) {
               type="monotone"
               dataKey="roas"
               stroke="#ec4899"
+              strokeWidth={1.5}
+              dot={false}
+              connectNulls
+            />
+            <Line
+              yAxisId="bookingRate"
+              type="monotone"
+              dataKey="bookingRate"
+              stroke="#f97316"
               strokeWidth={1.5}
               dot={false}
               connectNulls
