@@ -76,11 +76,24 @@ export type CampaignRevenue = {
   revenueINR: number;
 };
 
+export type PaidClient = {
+  campaign: string;
+  name: string;
+  email: string;
+  amountDisplay: string;
+  revenueINR: number;
+  leadDate: string;
+};
+
 export async function getStripeRevenueBycampaign(
   from: Date,
   to: Date,
   existingCrmMap: Map<string, CampaignRevenue>
-): Promise<{ revenueMap: Map<string, CampaignRevenue>; revenueByDate: Map<string, number> }> {
+): Promise<{
+  revenueMap: Map<string, CampaignRevenue>;
+  revenueByDate: Map<string, number>;
+  paidClients: PaidClient[];
+}> {
 
   const db = await getCrmDb();
   const fromStr = from.toISOString().slice(0, 10);
@@ -101,6 +114,7 @@ export async function getStripeRevenueBycampaign(
     {
       projection: {
         clientEmail: 1,
+        clientName: 1,
         metaCampaignName: 1,
         bookingCreatedAt: 1,
         "metaRawData.created_time": 1,
@@ -119,7 +133,7 @@ export async function getStripeRevenueBycampaign(
   }
 
   if (dedupedByEmail.size === 0) {
-    return { revenueMap: new Map(existingCrmMap), revenueByDate: new Map() };
+    return { revenueMap: new Map(existingCrmMap), revenueByDate: new Map(), paidClients: [] };
   }
 
   // Step 2 — fetch Stripe charges for these emails to get real price/currency
@@ -167,6 +181,7 @@ export async function getStripeRevenueBycampaign(
   // Step 3 — build revenue maps using Stripe price if available, else CRM price
   const revenueMap = new Map<string, CampaignRevenue>(existingCrmMap);
   const revenueByDate = new Map<string, number>();
+  const paidClients: PaidClient[] = [];
 
   for (const [email, booking] of dedupedByEmail.entries()) {
     const campaignName = (booking.metaCampaignName || "").trim();
@@ -197,7 +212,18 @@ export async function getStripeRevenueBycampaign(
     revenueMap.set(campKey, existing);
 
     revenueByDate.set(dateStr, (revenueByDate.get(dateStr) ?? 0) + revenueINR);
+
+    paidClients.push({
+      campaign: campaignName,
+      name: booking.clientName || email,
+      email,
+      amountDisplay: display,
+      revenueINR,
+      leadDate: dateStr,
+    });
   }
 
-  return { revenueMap, revenueByDate };
+  paidClients.sort((a, b) => b.leadDate.localeCompare(a.leadDate));
+
+  return { revenueMap, revenueByDate, paidClients };
 }

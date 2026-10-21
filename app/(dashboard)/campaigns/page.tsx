@@ -4,7 +4,8 @@ import { calcCTR, calcCPL, calcCPC } from "@/lib/kpi-calc";
 import FilterBar from "@/components/FilterBar";
 import CampaignTable from "@/components/CampaignTable";
 import { getCrmDb } from "@/lib/mongo-crm";
-import { getStripeRevenueBycampaign, canonicalCampaignKey } from "@/lib/stripe-revenue";
+import { getStripeRevenueBycampaign, canonicalCampaignKey, type PaidClient } from "@/lib/stripe-revenue";
+import PaidClientsTable from "@/components/PaidClientsTable";
 
 export const dynamic = "force-dynamic";
 
@@ -42,6 +43,7 @@ export default async function CampaignsPage({
 
   type CrmEntry = { meetings: number; paid: number; revenueDisplay: string; revenueINR: number };
   let crmMap: Map<string, CrmEntry> = new Map();
+  let paidClients: PaidClient[] = [];
 
   // Step 1 — meetings count from CRM (needed for L→M% column)
   try {
@@ -75,8 +77,9 @@ export default async function CampaignsPage({
 
   // Step 2 — revenue + paid count from Stripe (real source of truth)
   try {
-    const { revenueMap } = await getStripeRevenueBycampaign(range.from, range.to, crmMap);
+    const { revenueMap, paidClients: clients } = await getStripeRevenueBycampaign(range.from, range.to, crmMap);
     crmMap = revenueMap;
+    paidClients = clients;
   } catch (e) {
     console.error("Stripe revenue fetch failed (campaigns)", e);
   }
@@ -173,6 +176,14 @@ export default async function CampaignsPage({
 
       <div className="bg-[var(--surface)] border border-[var(--border)] rounded-[10px] px-4.5 py-4">
         <CampaignTable rows={rows} />
+      </div>
+
+      <div className="bg-[var(--surface)] border border-[var(--border)] rounded-[10px] px-4.5 py-4 mt-5">
+        <div className="mb-3.5">
+          <div className="text-sm font-semibold">Paid clients</div>
+          <div className="text-xs text-[var(--text-muted)] mt-0.5">{paidClients.length} in selected period · by Meta lead date</div>
+        </div>
+        <PaidClientsTable rows={paidClients} />
       </div>
     </div>
   );
