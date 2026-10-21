@@ -24,7 +24,8 @@ import AlertCard from "@/components/AlertCard";
 import FilterBar from "@/components/FilterBar";
 import CampaignTable from "@/components/CampaignTable";
 import { getCrmDb } from "@/lib/mongo-crm";
-import { getStripeRevenueBycampaign } from "@/lib/stripe-revenue";
+import { getStripeRevenueBycampaign, type PaidClient } from "@/lib/stripe-revenue";
+import PaidClientsTable from "@/components/PaidClientsTable";
 
 export const dynamic = "force-dynamic";
 
@@ -291,6 +292,7 @@ export default async function OverviewPage({
 
   type CrmEntry = { meetings: number; paid: number; revenueDisplay: string; revenueINR: number };
   let crmMap: Map<string, CrmEntry> = new Map();
+  let paidClients: PaidClient[] = [];
 
   // Step 1 — fetch meetings count from CRM (for L→M% column, unchanged)
   try {
@@ -322,8 +324,9 @@ export default async function OverviewPage({
 
   // Step 2 — revenue + paid count from Stripe (real source of truth)
   try {
-    const { revenueMap, revenueByDate: stripeByDate } = await getStripeRevenueBycampaign(range.from, range.to, crmMap);
+    const { revenueMap, revenueByDate: stripeByDate, paidClients: clients } = await getStripeRevenueBycampaign(range.from, range.to, crmMap);
     crmMap = revenueMap;
+    paidClients = clients;
     // Merge Stripe daily revenue into revenueByDate
     for (const [date, rev] of stripeByDate) {
       revenueByDate.set(date, (revenueByDate.get(date) ?? 0) + rev);
@@ -488,6 +491,14 @@ export default async function OverviewPage({
           <div className="text-xs text-[var(--text-muted)]">Click a row to drill into ad sets</div>
         </div>
         <CampaignTable rows={tableRows} />
+      </div>
+
+      <div className="bg-[var(--surface)] border border-[var(--border)] rounded-[10px] px-4.5 py-4 mt-5">
+        <div className="mb-3.5">
+          <div className="text-sm font-semibold">Paid clients</div>
+          <div className="text-xs text-[var(--text-muted)] mt-0.5">{paidClients.length} in selected period · by Meta lead date</div>
+        </div>
+        <PaidClientsTable rows={paidClients} />
       </div>
 
     </div>
