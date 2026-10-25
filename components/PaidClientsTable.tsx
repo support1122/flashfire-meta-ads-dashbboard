@@ -11,6 +11,8 @@ export default function PaidClientsTable({ rows }: { rows: PaidClient[] }) {
         <thead>
           <tr className="border-b border-[var(--border)]">
             <th className="text-left py-2.5 pr-4 text-[var(--text-muted)] font-medium">Campaign</th>
+            <th className="text-left py-2.5 px-3 text-[var(--text-muted)] font-medium">Ad set</th>
+            <th className="text-left py-2.5 px-3 text-[var(--text-muted)] font-medium">Poster (Ad)</th>
             <th className="text-left py-2.5 px-3 text-[var(--text-muted)] font-medium">Client</th>
             <th className="text-left py-2.5 px-3 text-[var(--text-muted)] font-medium">Email</th>
             <th className="text-left py-2.5 px-3 text-[var(--text-muted)] font-medium">Lead date</th>
@@ -21,6 +23,8 @@ export default function PaidClientsTable({ rows }: { rows: PaidClient[] }) {
           {rows.map((r) => (
             <tr key={r.email} className="border-b border-[var(--border)] hover:bg-[var(--surface-2)]">
               <td className="py-2.5 pr-4 font-medium">{r.campaign}</td>
+              <td className="py-2.5 px-3">{r.adSet}</td>
+              <td className="py-2.5 px-3">{r.poster}</td>
               <td className="py-2.5 px-3">{r.name}</td>
               <td className="py-2.5 px-3 text-[var(--text-2)]">{r.email}</td>
               <td className="py-2.5 px-3 tabular-nums text-[var(--text-2)]">{r.leadDate}</td>

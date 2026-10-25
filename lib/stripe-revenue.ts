@@ -78,6 +78,8 @@ export type CampaignRevenue = {
 
 export type PaidClient = {
   campaign: string;
+  adSet: string;
+  poster: string;
   name: string;
   email: string;
   amountDisplay: string;
@@ -116,6 +118,10 @@ export async function getStripeRevenueBycampaign(
         clientEmail: 1,
         clientName: 1,
         metaCampaignName: 1,
+        metaAdsetName: 1,
+        metaAdName: 1,
+        "metaRawData.adset_name": 1,
+        "metaRawData.ad_name": 1,
         bookingCreatedAt: 1,
         "metaRawData.created_time": 1,
         paymentPlan: 1,
@@ -215,6 +221,8 @@ export async function getStripeRevenueBycampaign(
 
     paidClients.push({
       campaign: campaignName,
+      adSet: booking.metaAdsetName || booking.metaRawData?.adset_name || "—",
+      poster: booking.metaAdName || booking.metaRawData?.ad_name || "—",
       name: booking.clientName || email,
       email,
       amountDisplay: display,
