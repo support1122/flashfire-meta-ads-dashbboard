@@ -1,10 +1,11 @@
-import { prisma } from "@/lib/db";
+import { googlePrisma as prisma } from "@/lib/google-db";
 import { fetchGoogleCampaigns, fetchGoogleInsights } from "@/lib/google-ads-api";
 import { fetchAdGroups, fetchAds, fetchKeywords, fetchStats, fetchGeoNames } from "@/lib/google-ads-extra";
 
 export function googleConfigured(): boolean {
   return Boolean(
-    process.env.GOOGLE_ADS_CLIENT_ID &&
+    process.env.GOOGLE_DATABASE_URL &&
+      process.env.GOOGLE_ADS_CLIENT_ID &&
       process.env.GOOGLE_ADS_CLIENT_SECRET &&
       process.env.GOOGLE_ADS_REFRESH_TOKEN &&
       process.env.GOOGLE_ADS_CUSTOMER_ID,
