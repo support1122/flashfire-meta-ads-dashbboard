@@ -4,6 +4,7 @@ import { parseDateRange } from "@/lib/query-helpers";
 import { calcCTR, calcCPC } from "@/lib/kpi-calc";
 import FilterBar from "@/components/FilterBar";
 import StatusBadge from "@/components/StatusBadge";
+import GoogleOverview from "./GoogleOverview";
 
 export const dynamic = "force-dynamic";
 
@@ -12,6 +13,7 @@ const inr2 = (n: number) => `₹${n.toLocaleString("en-IN", { maximumFractionDig
 const num = (n: number) => n.toLocaleString("en-IN", { maximumFractionDigits: 0 });
 
 const VIEWS = [
+  { key: "overview", label: "Overview" },
   { key: "campaigns", label: "Campaigns" },
   { key: "ad_group", label: "Ad groups" },
   { key: "ad", label: "Ads" },
@@ -44,8 +46,8 @@ function MetricHeads({ withValue = true }: { withValue?: boolean }) {
       <th className={thR}>Clicks</th>
       <th className={thR}>CTR</th>
       <th className={thR}>CPC</th>
-      <th className={thR}>Conv.</th>
-      <th className={thR}>Cost/conv.</th>
+      <th className={thR}>Leads</th>
+      <th className={thR}>CPL</th>
       {withValue && <th className={thR}>Conv. value</th>}
     </>
   );
@@ -88,7 +90,7 @@ export default async function GoogleAdsPage({
     Object.entries(sp).filter(([, v]) => v !== undefined) as [string, string][],
   );
   const range = parseDateRange(params);
-  const view = VIEWS.find((v) => v.key === sp.view)?.key ?? "campaigns";
+  const view = VIEWS.find((v) => v.key === sp.view)?.key ?? "overview";
   const campaignId = sp.campaignId || undefined;
   // FilterBar uses Meta-style statuses; Google calls "ACTIVE" -> "ENABLED".
   const statusFilter = sp.status === "ACTIVE" ? "ENABLED" : sp.status || undefined;
@@ -121,8 +123,8 @@ export default async function GoogleAdsPage({
     { label: "Clicks", value: num(t.clicks) },
     { label: "CTR", value: `${calcCTR(t.clicks, t.impressions).toFixed(2)}%` },
     { label: "Avg CPC", value: inr2(calcCPC(t.spend, t.clicks)) },
-    { label: "Conversions", value: t.conversions.toFixed(1) },
-    { label: "Cost / conv.", value: t.conversions > 0 ? inr(t.spend / t.conversions) : "—" },
+    { label: "Leads", value: t.conversions.toFixed(1) },
+    { label: "CPL", value: t.conversions > 0 ? inr(t.spend / t.conversions) : "—" },
   ];
 
   let body: React.ReactNode;
@@ -180,7 +182,7 @@ export default async function GoogleAdsPage({
         </tbody>
       </table>
     );
-  } else {
+  } else if (view !== "overview") {
     /* ───────── every other view reads the flat GoogleStat table ───────── */
     const grouped = await prisma.googleStat.groupBy({
       by: ["campaignId", "adGroupId", "entityId", "dim1", "dim2"],
@@ -285,6 +287,7 @@ export default async function GoogleAdsPage({
         <FilterBar campaigns={allCampaigns.map((c) => ({ id: c.id, name: c.name }))} />
       </div>
 
+      {view !== "overview" && (
       <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3 mb-5">
         {kpis.map((k) => (
           <div key={k.label} className="bg-[var(--surface)] border border-[var(--border)] rounded-[10px] px-4 py-3.5">
@@ -293,6 +296,7 @@ export default async function GoogleAdsPage({
           </div>
         ))}
       </div>
+      )}
 
       <div className="flex gap-1 flex-wrap mb-3">
         {VIEWS.map((v) => (
@@ -310,6 +314,9 @@ export default async function GoogleAdsPage({
         ))}
       </div>
 
+      {view === "overview" && allCampaigns.length > 0 ? (
+        <GoogleOverview from={range.from} to={range.to} campaignId={campaignId} />
+      ) : (
       <div className="bg-[var(--surface)] border border-[var(--border)] rounded-[10px] px-4.5 py-4 overflow-x-auto">
         {allCampaigns.length === 0 ? (
           <div className="text-[13px] text-[var(--text-muted)] py-6 text-center">
@@ -319,6 +326,7 @@ export default async function GoogleAdsPage({
           body
         )}
       </div>
+      )}
     </div>
   );
 }
