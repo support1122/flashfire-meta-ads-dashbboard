@@ -52,8 +52,10 @@ export default async function GoogleOverview({
   to: Date;
   campaignId?: string;
 }) {
-  const lengthDays = Math.round((to.getTime() - from.getTime()) / 86400000);
-  const prevFrom = new Date(from.getTime() - (lengthDays + 1) * 86400000);
+  // `to` is end-of-day, so (to - from) is just under a whole number of days: ceil gives the true
+  // number of calendar days in the range (e.g. 11 Nov..18 Nov = 8).
+  const rangeDays = Math.max(1, Math.ceil((to.getTime() - from.getTime()) / 86400000));
+  const prevFrom = new Date(from.getTime() - rangeDays * 86400000);
   const prevTo = new Date(from.getTime() - 1);
   const where = (a: Date, b: Date) => ({ date: { gte: a, lte: b }, ...(campaignId ? { campaignId } : {}) });
   const sums = { spend: true, impressions: true, clicks: true, conversions: true, interactions: true } as const;
@@ -87,13 +89,17 @@ export default async function GoogleOverview({
 
   // Meetings come from the CRM and can only be attributed at account level (see lib/google-crm.ts).
   let meetingsByDate = new Map<string, number>();
+  let uniqueByDate = new Map<string, number>();
   let meetingsTotal = 0;
+  let uniqueTotal = 0;
   let meetingsOk = !campaignId;
   if (!campaignId) {
     try {
       const m = await getGoogleMeetingsByDate(from, to);
       meetingsByDate = m.byDate;
+      uniqueByDate = m.uniqueByDate;
       meetingsTotal = m.total;
+      uniqueTotal = m.uniqueTotal;
     } catch (e) {
       console.error("CRM meetings fetch failed (google overview)", e);
       meetingsOk = false;
@@ -124,7 +130,7 @@ export default async function GoogleOverview({
 
   const enabled = campaigns.filter((x) => x.status === "ENABLED");
   const totalDailyBudget = enabled.reduce((t, x) => t + (x.dailyBudget ?? 0), 0);
-  const daysElapsed = Math.max(1, lengthDays + 1);
+  const daysElapsed = rangeDays;
   const pacing = totalDailyBudget > 0 && daysElapsed <= 31 ? c.spend / (totalDailyBudget * daysElapsed) : null;
 
   // Day-wise rows for every day in range (up to today), zero-filled so quiet days show too.
@@ -152,6 +158,7 @@ export default async function GoogleOverview({
         cpc: calcCPC(spend, clicks),
         leadRate: clicks > 0 ? (l / clicks) * 100 : 0,
         meetings: meetingsByDate.get(date) ?? 0,
+        unique: uniqueByDate.get(date) ?? 0,
         costPerMeeting: calcCPL(spend, meetingsByDate.get(date) ?? 0),
         leadToMeeting: l > 0 ? ((meetingsByDate.get(date) ?? 0) / l) * 100 : null,
       };
@@ -182,6 +189,7 @@ export default async function GoogleOverview({
 
   const costPerMeeting = meetingsOk ? calcCPL(c.spend, meetingsTotal) : null;
   const leadToMeeting = meetingsOk && leads > 0 ? (meetingsTotal / leads) * 100 : null;
+  const costPerUnique = meetingsOk ? calcCPL(c.spend, uniqueTotal) : null;
   const meetingsNote = "From CRM bookings tagged utm_source=google & paid. Untagged bookings can't be attributed, so this is a lower bound.";
 
   const sis = isAgg._avg.searchImpressionShare;
@@ -198,8 +206,8 @@ export default async function GoogleOverview({
         <KpiCard icon={<IndianRupee size={13} />} label="Total spend" value={inr(c.spend)} deltaLabel={pctLabel(calcPercentChange(c.spend, p.spend), "vs prev period")} direction={direction(calcPercentChange(c.spend, p.spend))} />
         <KpiCard icon={<Target size={13} />} label="Leads" value={num(leads)} tooltip="Google conversions = 'Lead Form Submission' (your only conversion action)." deltaLabel={pctLabel(calcPercentChange(leads, p.conversions), "vs prev period")} direction={direction(calcPercentChange(leads, p.conversions))} />
         <KpiCard icon={<Receipt size={13} />} label="CPL (cost per lead)" value={cpl !== null ? inr(cpl) : "—"} deltaLabel={cpl !== null && prevCpl !== null ? pctLabel(calcPercentChange(cpl, prevCpl), null, true) : undefined} direction={cpl !== null && prevCpl !== null ? direction(-1 * (calcPercentChange(cpl, prevCpl) ?? 0)) : "flat"} />
-        <KpiCard icon={<CalendarCheck size={13} />} label="Meetings" value={meetingsOk ? num(meetingsTotal) : "—"} subtitle={meetingsOk ? (leadToMeeting !== null ? `${leadToMeeting.toFixed(1)}% of leads` : undefined) : "account level only"} tooltip={meetingsNote} direction="flat" />
-        <KpiCard icon={<CalendarCheck size={13} />} label="Cost per meeting" value={costPerMeeting !== null ? inr(costPerMeeting) : "—"} subtitle={meetingsOk ? "spend ÷ meetings" : "clear the campaign filter"} tooltip={meetingsNote} direction="flat" />
+        <KpiCard icon={<CalendarCheck size={13} />} label="Meetings" value={meetingsOk ? num(meetingsTotal) : "—"} subtitle={meetingsOk ? `${num(uniqueTotal)} unique client${uniqueTotal === 1 ? "" : "s"}${leadToMeeting !== null ? ` · ${leadToMeeting.toFixed(1)}% of leads` : ""}` : "account level only"} tooltip={meetingsNote} direction="flat" />
+        <KpiCard icon={<CalendarCheck size={13} />} label="Cost per meeting" value={costPerMeeting !== null ? inr(costPerMeeting) : "—"} subtitle={meetingsOk ? (costPerUnique !== null ? `${inr(costPerUnique)} per unique client` : "spend ÷ meetings") : "clear the campaign filter"} tooltip={meetingsNote} direction="flat" />
         <KpiCard icon={<MousePointerClick size={13} />} label="CTR" value={`${ctr.toFixed(2)}%`} deltaLabel={pctLabel(calcPercentChange(ctr, prevCtr), "vs prev")} direction={direction(calcPercentChange(ctr, prevCtr))} />
         <KpiCard icon={<Coins size={13} />} label="CPC" value={inr2(cpc)} deltaLabel={pctLabel(calcPercentChange(cpc, prevCpc), null, true)} direction={direction(-1 * (calcPercentChange(cpc, prevCpc) ?? 0))} />
         <KpiCard icon={<Eye size={13} />} label="CPM" value={inr(cpm)} deltaLabel={pctLabel(calcPercentChange(cpm, prevCpm), null, true)} direction={direction(-1 * (calcPercentChange(cpm, prevCpm) ?? 0))} />
@@ -269,6 +277,7 @@ export default async function GoogleOverview({
               <th className={th}>Impr.</th>
               <th className={th}>Lead rate</th>
               <th className={th}>Meetings</th>
+              <th className={th}>Unique clients</th>
               <th className={th}>Cost/meeting</th>
               <th className={th}>Lead→Meeting</th>
             </tr>
@@ -285,6 +294,7 @@ export default async function GoogleOverview({
               <td className={td}>{num(c.impressions)}</td>
               <td className={td}>{leadRate.toFixed(2)}%</td>
               <td className={td}>{meetingsOk ? num(meetingsTotal) : "—"}</td>
+              <td className={td}>{meetingsOk ? num(uniqueTotal) : "—"}</td>
               <td className={td}>{costPerMeeting !== null ? inr(costPerMeeting) : "—"}</td>
               <td className={td}>{leadToMeeting !== null ? `${leadToMeeting.toFixed(1)}%` : "—"}</td>
             </tr>
@@ -303,6 +313,7 @@ export default async function GoogleOverview({
                 <td className={td}>{num(r.impressions)}</td>
                 <td className={td}>{r.clicks > 0 ? `${r.leadRate.toFixed(1)}%` : "—"}</td>
                 <td className={td}>{meetingsOk ? num(r.meetings) : "—"}</td>
+                <td className={td}>{meetingsOk ? num(r.unique) : "—"}</td>
                 <td className={td}>{meetingsOk && r.costPerMeeting !== null ? inr(r.costPerMeeting) : "—"}</td>
                 <td className={td}>{meetingsOk && r.leadToMeeting !== null ? `${r.leadToMeeting.toFixed(0)}%` : "—"}</td>
               </tr>

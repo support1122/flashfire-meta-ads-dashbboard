@@ -13,40 +13,49 @@
 import { getCrmDb } from "@/lib/mongo-crm";
 
 export interface GoogleMeetings {
-  byDate: Map<string, number>; // YYYY-MM-DD (India time) -> meetings
+  byDate: Map<string, number>; // YYYY-MM-DD (India time) -> bookings counted as meetings
+  uniqueByDate: Map<string, number>; // same, but distinct clients (a client can have 2+ bookings)
   total: number;
+  uniqueTotal: number;
 }
 
 export async function getGoogleMeetingsByDate(from: Date, to: Date): Promise<GoogleMeetings> {
   const db = await getCrmDb();
-  const rows = await db
-    .collection("campaignbookings")
-    .aggregate([
-      {
-        $match: {
-          bookingCreatedAt: { $gte: from, $lte: to },
-          bookingStatus: { $ne: "not-scheduled" },
-          utmSource: { $regex: "^google", $options: "i" },
-          $or: [
-            { utmMedium: { $regex: "^(paid|cpc)$", $options: "i" } },
-            { gclid: { $exists: true, $nin: [null, ""] } },
-          ],
+  const match = {
+    bookingCreatedAt: { $gte: from, $lte: to },
+    bookingStatus: { $ne: "not-scheduled" },
+    utmSource: { $regex: "^google", $options: "i" },
+    $or: [
+      { utmMedium: { $regex: "^(paid|cpc)$", $options: "i" } },
+      { gclid: { $exists: true, $nin: [null, ""] } },
+    ],
+  };
+  const client = { $toLower: { $ifNull: ["$clientEmail", { $toString: "$_id" }] } };
+  const coll = db.collection("campaignbookings");
+
+  const [rows, uniq] = await Promise.all([
+    coll
+      .aggregate([
+        { $match: match },
+        {
+          $group: {
+            _id: { $dateToString: { format: "%Y-%m-%d", date: "$bookingCreatedAt", timezone: "Asia/Kolkata" } },
+            n: { $sum: 1 },
+            clients: { $addToSet: client },
+          },
         },
-      },
-      {
-        $group: {
-          _id: { $dateToString: { format: "%Y-%m-%d", date: "$bookingCreatedAt", timezone: "Asia/Kolkata" } },
-          n: { $sum: 1 },
-        },
-      },
-    ])
-    .toArray();
+      ])
+      .toArray(),
+    coll.aggregate([{ $match: match }, { $group: { _id: client } }, { $count: "n" }]).toArray(),
+  ]);
 
   const byDate = new Map<string, number>();
+  const uniqueByDate = new Map<string, number>();
   let total = 0;
   for (const r of rows) {
     byDate.set(String(r._id), r.n);
+    uniqueByDate.set(String(r._id), r.clients.length);
     total += r.n;
   }
-  return { byDate, total };
+  return { byDate, uniqueByDate, total, uniqueTotal: uniq[0]?.n ?? 0 };
 }
