@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { prisma } from "@/lib/db";
+import { googlePrisma as prisma } from "@/lib/google-db";
 import { parseDateRange } from "@/lib/query-helpers";
 import { calcCTR, calcCPC } from "@/lib/kpi-calc";
 import FilterBar from "@/components/FilterBar";
@@ -71,6 +71,18 @@ export default async function GoogleAdsPage({
 }: {
   searchParams: Promise<Record<string, string | undefined>>;
 }) {
+  if (!process.env.GOOGLE_DATABASE_URL) {
+    return (
+      <div>
+        <h1 className="text-[19px] font-semibold m-0">Google Ads</h1>
+        <div className="mt-4 bg-[var(--surface)] border border-[var(--border)] rounded-[10px] px-4.5 py-4 text-[13px] text-[var(--text-muted)]">
+          The Google Ads database is not configured. Set <code>GOOGLE_DATABASE_URL</code> (and the{" "}
+          <code>GOOGLE_ADS_*</code> variables), redeploy, then run <code>/api/sync/google?full=1</code>.
+        </div>
+      </div>
+    );
+  }
+
   const sp = await searchParams;
   const params = new URLSearchParams(
     Object.entries(sp).filter(([, v]) => v !== undefined) as [string, string][],

@@ -4,7 +4,8 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "prisma migrate deploy && prisma generate && next build",
+    "build": "prisma generate && prisma generate --schema prisma/google/schema.prisma && node scripts/google-migrate.mjs && next build",
+    "postinstall": "prisma generate --schema prisma/google/schema.prisma",
     "start": "next start",
     "lint": "eslint"
   },
