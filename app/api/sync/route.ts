@@ -13,6 +13,7 @@ import {
 } from "@/lib/meta-api";
 import { calcCTR, calcCPC, calcCPM, calcFrequency, calcCPL } from "@/lib/kpi-calc";
 import { runAlertsEngine } from "@/lib/alerts-engine";
+import { syncGoogleAds, googleConfigured } from "@/lib/google-sync";
 
 export const dynamic = "force-dynamic";
 
@@ -106,6 +107,17 @@ async function runSync(lookbackDays: number) {
 
     const alertResult = await runAlertsEngine();
 
+    // Google Ads (separate tables) — best-effort, never fails the Meta sync
+    let google: { campaigns: number; insightRows: number } | { error: string } | null = null;
+    if (googleConfigured()) {
+      try {
+        google = await syncGoogleAds(lookbackDays);
+      } catch (e) {
+        google = { error: e instanceof Error ? e.message : String(e) };
+        await prisma.syncLog.create({ data: { status: "failed", message: `[google] ${google.error}`.slice(0, 1000) } });
+      }
+    }
+
     const mode = lookbackDays <= 7 ? "incremental" : "full";
     await prisma.syncLog.create({
       data: {
@@ -122,6 +134,7 @@ async function runSync(lookbackDays: number) {
       ads: ads.length,
       insightRows: insightRowCount,
       alerts: alertResult.created,
+      google,
       durationMs: Date.now() - startedAt,
     });
   } catch (err) {

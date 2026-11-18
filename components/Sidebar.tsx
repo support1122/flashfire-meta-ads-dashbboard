@@ -13,11 +13,13 @@ import {
   Settings,
   LogOut,
   GitBranch,
+  Search,
 } from "lucide-react";
 
 const NAV = [
   { href: "/", label: "Overview", icon: LayoutDashboard },
   { href: "/campaigns", label: "Campaigns", icon: Megaphone },
+  { href: "/google-ads", label: "Google Ads", icon: Search },
   { href: "/pipeline", label: "Pipeline", icon: GitBranch },
   { href: "/creatives", label: "Creatives", icon: Image },
   { href: "/audience", label: "Audience", icon: Users },
