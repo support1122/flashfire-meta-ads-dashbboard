@@ -59,3 +59,58 @@ export async function getGoogleMeetingsByDate(from: Date, to: Date): Promise<Goo
   }
   return { byDate, uniqueByDate, total, uniqueTotal: uniq[0]?.n ?? 0 };
 }
+
+export interface GoogleLead {
+  name: string;
+  email: string;
+  phone: string | null;
+  status: string; // bookingStatus; "not-scheduled" = lead who never booked a meeting
+  isMeeting: boolean;
+  market: string | null;
+  time: string; // ISO, when the lead/booking was created
+  meetingAt: string | null; // ISO, scheduled meeting start
+}
+
+/** Every Google-tagged CRM row per day (India time), including leads that never booked a meeting. */
+export async function getGoogleLeadsByDate(from: Date, to: Date): Promise<Map<string, GoogleLead[]>> {
+  const db = await getCrmDb();
+  const rows = await db
+    .collection("campaignbookings")
+    .find(
+      {
+        bookingCreatedAt: { $gte: from, $lte: to },
+        utmSource: { $regex: "^google", $options: "i" },
+        $or: [
+          { utmMedium: { $regex: "^(paid|cpc)$", $options: "i" } },
+          { gclid: { $exists: true, $nin: [null, ""] } },
+        ],
+      },
+      {
+        projection: {
+          clientName: 1, clientEmail: 1, clientPhone: 1, bookingStatus: 1,
+          leadMarket: 1, bookingCreatedAt: 1, scheduledEventStartTime: 1,
+        },
+      },
+    )
+    .sort({ bookingCreatedAt: -1 })
+    .toArray();
+
+  const out = new Map<string, GoogleLead[]>();
+  for (const r of rows) {
+    const created = new Date(r.bookingCreatedAt);
+    const day = created.toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
+    const status = String(r.bookingStatus ?? "unknown");
+    const lead: GoogleLead = {
+      name: r.clientName || "—",
+      email: r.clientEmail || "—",
+      phone: r.clientPhone ?? null,
+      status,
+      isMeeting: status !== "not-scheduled",
+      market: r.leadMarket ? String(r.leadMarket).toUpperCase() : null,
+      time: created.toISOString(),
+      meetingAt: r.scheduledEventStartTime ? new Date(r.scheduledEventStartTime).toISOString() : null,
+    };
+    out.set(day, [...(out.get(day) ?? []), lead]);
+  }
+  return out;
+}
