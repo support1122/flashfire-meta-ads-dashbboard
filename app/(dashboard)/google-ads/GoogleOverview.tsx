@@ -18,7 +18,7 @@ import { googlePrisma as prisma } from "@/lib/google-db";
 import { calcCTR, calcCPC, calcCPM, calcCPL, calcPercentChange } from "@/lib/kpi-calc";
 import KpiCard from "@/components/KpiCard";
 import TrendChart from "@/components/TrendChart";
-import { getGoogleMeetingsByDate } from "@/lib/google-crm";
+import { getGoogleMeetingsByDate, getGoogleLeadsByDate, type GoogleLead } from "@/lib/google-crm";
 
 const inr = (n: number) => `₹${n.toLocaleString("en-IN", { maximumFractionDigits: 0 })}`;
 const inr2 = (n: number) => `₹${n.toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
@@ -93,7 +93,13 @@ export default async function GoogleOverview({
   let meetingsTotal = 0;
   let uniqueTotal = 0;
   let meetingsOk = !campaignId;
+  let leadsByDay = new Map<string, GoogleLead[]>();
   if (!campaignId) {
+    try {
+      leadsByDay = await getGoogleLeadsByDate(from, to);
+    } catch (e) {
+      console.error("CRM leads fetch failed (google overview)", e);
+    }
     try {
       const m = await getGoogleMeetingsByDate(from, to);
       meetingsByDate = m.byDate;
@@ -321,6 +327,55 @@ export default async function GoogleOverview({
           </tbody>
         </table>
       </div>
+      {!campaignId && (
+        <div className={`${card} mt-5`}>
+          <div className="mb-3.5">
+            <div className="text-sm font-semibold">Leads by day (lead quality)</div>
+            <div className="text-xs text-[var(--text-muted)] mt-0.5">
+              Who came in from Google paid each day and whether they booked a meeting. Source: CRM bookings tagged Google paid, so it can differ from the Google Ads lead count.
+            </div>
+          </div>
+          {[...leadsByDay.keys()].sort().reverse().map((date) => {
+            const list = leadsByDay.get(date)!;
+            const booked = list.filter((l) => l.isMeeting).length;
+            return (
+              <details key={date} className="border-t border-[var(--border)] py-2" open={date === todayKey}>
+                <summary className="cursor-pointer text-[13px] font-medium flex items-center gap-3">
+                  <span>{new Date(date).toLocaleDateString("en-IN", { day: "numeric", month: "short", weekday: "short", timeZone: "UTC" })}</span>
+                  <span className="text-[var(--text-muted)] font-normal">{list.length} lead{list.length === 1 ? "" : "s"} · {booked} meeting{booked === 1 ? "" : "s"} booked</span>
+                </summary>
+                <table className="w-full border-collapse mt-2">
+                  <thead>
+                    <tr className="border-b border-[var(--border)]">
+                      <th className={`${th} !text-left`}>Name</th>
+                      <th className={`${th} !text-left`}>Email</th>
+                      <th className={`${th} !text-left`}>Phone</th>
+                      <th className={th}>Market</th>
+                      <th className={th}>Status</th>
+                      <th className={th}>Lead time (IST)</th>
+                      <th className={th}>Meeting time (IST)</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {list.map((l, i) => (
+                      <tr key={`${l.email}-${i}`} className="border-b border-[var(--border)] last:border-0">
+                        <td className={`${td} !text-left font-medium`}>{l.name}</td>
+                        <td className={`${td} !text-left`}>{l.email}</td>
+                        <td className={`${td} !text-left`}>{l.phone ?? "—"}</td>
+                        <td className={td}>{l.market ?? "—"}</td>
+                        <td className={td}>{l.isMeeting ? l.status : "no meeting booked"}</td>
+                        <td className={td}>{new Date(l.time).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Kolkata" })}</td>
+                        <td className={td}>{l.meetingAt ? new Date(l.meetingAt).toLocaleString("en-IN", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", timeZone: "Asia/Kolkata" }) : "—"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </details>
+            );
+          })}
+          {leadsByDay.size === 0 && <div className="text-[13px] text-[var(--text-muted)]">No Google-tagged leads in this period.</div>}
+        </div>
+      )}
     </div>
   );
 }
