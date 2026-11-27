@@ -53,7 +53,7 @@ export default async function CampaignsPage({
       {
         $match: {
           metaCampaignName: { $ne: null },
-          bookingStatus: { $nin: ["not-scheduled"] },
+          bookingStatus: { $in: ["completed"] },
           $or: [
             { "metaRawData.created_time": { $gte: range.from.toISOString().slice(0, 10), $lte: range.to.toISOString().slice(0, 10) + "T23:59:59" } },
             { $and: [{ "metaRawData.created_time": { $exists: false } }, { bookingCreatedAt: { $gte: range.from, $lte: range.to } }] },

@@ -66,7 +66,7 @@ export default function CampaignTable({ rows }: { rows: CampaignRow[] }) {
             <th className="text-right py-2.5 px-3 text-[var(--text-muted)] font-medium">Impressions</th>
             <th className="text-right py-2.5 px-3 text-[var(--text-muted)] font-medium">Clicks</th>
             <th className="text-right py-2.5 px-3 text-[var(--text-muted)] font-medium">Leads</th>
-            <th className="text-right py-2.5 px-3 text-[var(--text-muted)] font-medium">Meetings</th>
+            <th className="text-right py-2.5 px-3 text-[var(--text-muted)] font-medium">Comp. Meet.</th>
             <th className="text-right py-2.5 px-3 text-[var(--text-muted)] font-medium">L→M %</th>
             <th className="text-right py-2.5 px-3 text-[var(--text-muted)] font-medium">Paid</th>
             <th className="text-right py-2.5 px-3 text-[var(--text-muted)] font-medium">Revenue</th>
