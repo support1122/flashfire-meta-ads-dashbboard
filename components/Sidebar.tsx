@@ -14,6 +14,7 @@ import {
   LogOut,
   GitBranch,
   Search,
+  CreditCard,
 } from "lucide-react";
 
 const NAV = [
@@ -21,6 +22,7 @@ const NAV = [
   { href: "/campaigns", label: "Campaigns", icon: Megaphone },
   { href: "/google-ads", label: "Google Ads", icon: Search },
   { href: "/pipeline", label: "Pipeline", icon: GitBranch },
+  { href: "/stripe-data", label: "Stripe Data", icon: CreditCard },
   { href: "/creatives", label: "Creatives", icon: Image },
   { href: "/audience", label: "Audience", icon: Users },
   { href: "/budget", label: "Budget", icon: Wallet },
